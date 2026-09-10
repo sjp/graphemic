@@ -24,6 +24,7 @@ describe('public surface', () => {
       'codePoints',
       'codeUnits',
       'graphemes',
+      'utf8',
     ]);
   });
 
@@ -72,10 +73,20 @@ describe('public surface', () => {
     expect(index.codeUnits.truncate).toBe(subpath.truncate);
   });
 
+  it('exposes utf8 as a module namespace, not an object literal', async () => {
+    const subpath = await import('./utf8.js');
+
+    // Fitting a byte budget is offered; indexing text by byte offset is not.
+    expect(Object.keys(index.utf8).toSorted()).toEqual(['length', 'slice', 'truncate']);
+    expect(index.utf8.length).toBe(subpath.length);
+    expect(index.utf8.truncate).toBe(subpath.truncate);
+  });
+
   it('measures through the namespaces', () => {
     expect(index.graphemes.length('hi \u{1F44B}\u{1F3FD}')).toBe(4);
     expect(index.codePoints.length('hi \u{1F44B}\u{1F3FD}')).toBe(5);
     expect(index.codeUnits.length('hi \u{1F44B}\u{1F3FD}')).toBe(7);
+    expect(index.utf8.length('hi \u{1F44B}\u{1F3FD}')).toBe(11);
   });
 
   it('exports the boundary types', () => {
