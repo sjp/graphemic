@@ -22,6 +22,7 @@ describe('public surface', () => {
       'SegmenterUnavailableError',
       'VERSION',
       'codePoints',
+      'codeUnits',
       'graphemes',
     ]);
   });
@@ -62,9 +63,19 @@ describe('public surface', () => {
     expect(index.codePoints.truncate).toBe(subpath.truncate);
   });
 
+  it('exposes codeUnits as a module namespace, not an object literal', async () => {
+    const subpath = await import('./codeUnits.js');
+
+    // Fitting a code-unit budget is offered; iterating code units is not.
+    expect(Object.keys(index.codeUnits).toSorted()).toEqual(['length', 'slice', 'truncate']);
+    expect(index.codeUnits.length).toBe(subpath.length);
+    expect(index.codeUnits.truncate).toBe(subpath.truncate);
+  });
+
   it('measures through the namespaces', () => {
     expect(index.graphemes.length('hi \u{1F44B}\u{1F3FD}')).toBe(4);
     expect(index.codePoints.length('hi \u{1F44B}\u{1F3FD}')).toBe(5);
+    expect(index.codeUnits.length('hi \u{1F44B}\u{1F3FD}')).toBe(7);
   });
 
   it('exports the boundary types', () => {
