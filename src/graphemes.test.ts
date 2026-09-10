@@ -4,8 +4,12 @@ import { SegmenterUnavailableError } from './errors.js';
 import {
   at,
   chunk,
+  includes,
+  indexOf,
   iterate,
   length,
+  padEnd,
+  padStart,
   reverse,
   slice,
   split,
@@ -449,6 +453,240 @@ describe('reverse', () => {
     // followed by a CR is two graphemes, but the reversal is one CRLF.
     expect(reverse('\n\r')).toBe('\r\n');
     expect(length(reverse('\n\r'))).toBe(1);
+  });
+});
+
+/** Whether `s` contains a surrogate that is not part of a pair. */
+const hasLoneSurrogate = (s: string): boolean =>
+  [...s].some((codePoint) => {
+    const unit = codePoint.charCodeAt(0);
+    return codePoint.length === 1 && unit >= 0xd800 && unit <= 0xdfff;
+  });
+
+describe('padStart', () => {
+  it.each([
+    ['a string whose graphemes outnumber its code units', WAVE_MEDIUM, 3, '.', `..${WAVE_MEDIUM}`],
+    ['with the default space fill', '5', 3, undefined, '  5'],
+    ['with a multi-code-point grapheme as the fill', 'a', 4, FAMILY, `${FAMILY.repeat(3)}a`],
+    ['with a multi-grapheme fill, cut where it does not fit', 'a', 4, 'xy', 'xyxa'],
+    ['with a fill longer than the gap', 'ab', 3, 'xyz', 'xab'],
+  ] as const)('pads %s', (_label, input, target, fill, expected) => {
+    expect(padStart(input, target, fill)).toBe(expected);
+  });
+
+  it.each([
+    ['already long enough', HI_WAVE, 4],
+    ['longer than the target', HI_WAVE, 2],
+    ['given a negative target', HI_WAVE, -5],
+    ['given NaN', HI_WAVE, Number.NaN],
+  ] as const)('returns the string unchanged when it is %s', (_label, input, target) => {
+    expect(padStart(input, target, '.')).toBe(input);
+  });
+
+  it('returns the string unchanged when the fill is empty, as String#padStart does', () => {
+    expect(padStart('ab', 5, '')).toBe('ab');
+  });
+
+  it('truncates a fractional target toward zero', () => {
+    expect(padStart('a', 3.9, '.')).toBe('..a');
+  });
+
+  it('counts the target in graphemes even when the fill is one', () => {
+    expect(length(padStart('a', 4, WAVE_MEDIUM))).toBe(4);
+    expect(padStart('a', 4, WAVE_MEDIUM)).toBe(`${WAVE_MEDIUM.repeat(3)}a`);
+  });
+});
+
+describe('padEnd', () => {
+  it.each([
+    [
+      'a fill that native padding would cut in half',
+      'ab',
+      5,
+      WAVE_MEDIUM,
+      `ab${WAVE_MEDIUM.repeat(3)}`,
+    ],
+    ['a fill whose last grapheme just fits', 'ab', 4, `x${BOTTLE_ZWJ}`, `abx${BOTTLE_ZWJ}`],
+    ['a fill whose last grapheme does not fit', 'ab', 3, `x${BOTTLE_ZWJ}`, 'abx'],
+    ['the empty string', '', 3, '.', '...'],
+    ['with the default space fill', '5', 3, undefined, '5  '],
+  ] as const)('pads with %s', (_label, input, target, fill, expected) => {
+    expect(padEnd(input, target, fill)).toBe(expected);
+  });
+
+  it('never leaves half a surrogate pair behind, unlike String#padEnd', () => {
+    // The native call is the bug this exists to fix: it ends in a lone high
+    // surrogate, because it cuts the fill at four code units of seven.
+    expect(hasLoneSurrogate('ab'.padEnd(5, WAVE_MEDIUM))).toBe(true);
+    expect(hasLoneSurrogate(padEnd('ab', 5, WAVE_MEDIUM))).toBe(false);
+  });
+
+  it('carries a lone surrogate through when the fill already contains one', () => {
+    expect(padEnd('a', 3, LONE_HIGH_SURROGATE)).toBe(`a${LONE_HIGH_SURROGATE.repeat(2)}`);
+  });
+});
+
+describe('padStart and padEnd', () => {
+  it.each([
+    ['padStart', padStart],
+    ['padEnd', padEnd],
+  ] as const)('%s throws a TypeError for a fill that is not a string', (_label, pad) => {
+    expect(() => pad('ab', 5, 42 as unknown as string)).toThrow(TypeError);
+    expect(() => pad('ab', 5, 42 as unknown as string)).toThrow(/fill must be a string/);
+  });
+
+  it.each([
+    ['padStart', padStart],
+    ['padEnd', padEnd],
+  ] as const)('%s rejects a RegExp fill at compile time too', (_label, pad) => {
+    // @ts-expect-error string fills only; a RegExp would pad with its source text.
+    expect(() => pad('ab', 5, /x/)).toThrow(TypeError);
+  });
+
+  it.each([
+    ['padStart', padStart],
+    ['padEnd', padEnd],
+  ] as const)('%s throws a RangeError for a target no string could reach', (_label, pad) => {
+    expect(() => pad('a', Number.POSITIVE_INFINITY, '.')).toThrow(RangeError);
+  });
+
+  it.each([
+    ['padStart', padStart],
+    ['padEnd', padEnd],
+  ] as const)('%s validates the fill even when nothing needs padding', (_label, pad) => {
+    expect(() => pad('abcde', 2, 42 as unknown as string)).toThrow(TypeError);
+  });
+
+  it.each(corpus)('pads $name to exactly the width asked for', ({ s, graphemes }) => {
+    // The fill is a character that joins to nothing, so the seams between the
+    // padding and the string add no graphemes and lose none.
+    for (const target of [0, 1, graphemes, graphemes + 3]) {
+      expect(length(padStart(s, target, '.'))).toBe(Math.max(target, graphemes));
+      expect(length(padEnd(s, target, '.'))).toBe(Math.max(target, graphemes));
+    }
+  });
+
+  it.each(corpus)('leaves $name itself untouched at either end', ({ s, graphemes }) => {
+    expect(padStart(s, graphemes + 3, '.')).toBe(`...${s}`);
+    expect(padEnd(s, graphemes + 3, '.')).toBe(`${s}...`);
+  });
+});
+
+describe('indexOf', () => {
+  it.each([
+    ['an index in graphemes, not code units', `hi ${WAVE_MEDIUM}!`, '!', undefined, 4],
+    ['a multi-grapheme needle', `xy${HI_WAVE}`, HI_WAVE, undefined, 2],
+    ['a needle equal to the string', HI_WAVE, HI_WAVE, undefined, 0],
+    ['the first of several occurrences', 'a,b,c', ',', undefined, 1],
+    ['an occurrence at or after fromIndex', `a${WAVE_MEDIUM}a`, 'a', 1, 2],
+    ['an overlapping occurrence once fromIndex skips past the first', 'aaa', 'aa', 1, 1],
+    [
+      'a lone surrogate as its own grapheme',
+      LONE_BETWEEN_LETTERS,
+      LONE_HIGH_SURROGATE,
+      undefined,
+      1,
+    ],
+  ] as const)('finds %s', (_label, s, search, fromIndex, expected) => {
+    expect(indexOf(s, search, fromIndex)).toBe(expected);
+  });
+
+  it.each([
+    ['a needle hiding inside a grapheme', `${E_ACUTE}x`, 'e', undefined],
+    ['a combining mark that belongs to its neighbour', `${E_ACUTE}x`, '\u0301', undefined],
+    ['half of an emoji sequence', WAVE_MEDIUM, WAVE, undefined],
+    ['a flag straddling two others', `${FLAG_AU}${FLAG_AU}`, FLAG_UA, undefined],
+    ['a needle longer than the string', 'ab', 'abc', undefined],
+    ['anything in the empty string', '', 'a', undefined],
+    ['an occurrence before fromIndex', 'abc', 'a', 1],
+    ['anything at all past the end', 'abc', 'c', 10],
+  ] as const)('returns -1 for %s', (_label, s, search, fromIndex) => {
+    expect(indexOf(s, search, fromIndex)).toBe(-1);
+  });
+
+  it.each([
+    ['at the start', 'abc', undefined, 0],
+    ['in the middle', 'abc', 2, 2],
+    ['clamped to the length when past the end', 'abc', 5, 3],
+    ['clamped to the length of the empty string', '', 5, 0],
+    ['measured in graphemes, not code units', HI_WAVE, 99, 4],
+  ] as const)('finds the empty needle %s, as String#indexOf', (_label, s, fromIndex, expected) => {
+    expect(indexOf(s, '', fromIndex)).toBe(expected);
+  });
+
+  it.each([
+    ['a negative fromIndex, which starts from zero', -5, 0],
+    ['NaN, which starts from zero', Number.NaN, 0],
+    ['a fractional fromIndex, truncated toward zero', 1.9, 2],
+  ] as const)('coerces %s', (_label, fromIndex, expected) => {
+    expect(indexOf('aba', 'a', fromIndex)).toBe(expected);
+  });
+
+  it('returns -1 for an infinite fromIndex without hanging', () => {
+    expect(indexOf('abc', 'b', Number.POSITIVE_INFINITY)).toBe(-1);
+  });
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['a number', 5],
+  ] as const)('throws a TypeError for %s as the needle', (_label, search) => {
+    expect(() => indexOf('abc', search as unknown as string)).toThrow(TypeError);
+    expect(() => indexOf('abc', search as unknown as string)).toThrow(/search must be a string/);
+  });
+
+  it('rejects a RegExp needle at compile time too', () => {
+    // @ts-expect-error string needles only; there is no RegExp search in v1.
+    expect(() => indexOf('abc', /b/)).toThrow(TypeError);
+  });
+
+  it.each(corpus)('finds every grapheme of $name at an index it really sits at', ({ s }) => {
+    for (const grapheme of new Set(toArray(s))) {
+      const found = indexOf(s, grapheme);
+
+      expect(found).toBeGreaterThanOrEqual(0);
+      expect(slice(s, found, found + 1)).toBe(grapheme);
+    }
+  });
+
+  it.each(corpus)('reports an index that slices $name back to the needle', ({ s, graphemes }) => {
+    for (const needle of [...new Set(toArray(s))].map((grapheme) => `${grapheme}${grapheme}`)) {
+      const found = indexOf(s, needle);
+
+      if (found === -1) continue;
+      expect(found + length(needle)).toBeLessThanOrEqual(graphemes);
+      expect(slice(s, found, found + length(needle))).toBe(needle);
+    }
+  });
+});
+
+describe('includes', () => {
+  it.each([
+    ['a whole grapheme', HI_WAVE, WAVE_MEDIUM, undefined, true],
+    ['the empty needle', 'abc', '', undefined, true],
+    ['the empty needle past the end', 'abc', '', 99, true],
+    ['a letter hidden inside an accented one', `${E_ACUTE}x`, 'e', undefined, false],
+    ['half an emoji sequence', WAVE_MEDIUM, WAVE, undefined, false],
+    ['an occurrence before fromIndex', 'abc', 'a', 1, false],
+    ['a needle past the end', 'abc', 'c', 10, false],
+  ] as const)('answers %s', (_label, s, search, fromIndex, expected) => {
+    expect(includes(s, search, fromIndex)).toBe(expected);
+  });
+
+  it('throws a TypeError for a needle that is not a string', () => {
+    expect(() => includes('abc', 5 as unknown as string)).toThrow(TypeError);
+  });
+
+  it('rejects a RegExp needle at compile time too', () => {
+    // @ts-expect-error as String#includes, which also refuses a RegExp.
+    expect(() => includes('abc', /b/)).toThrow(TypeError);
+  });
+
+  it.each(corpus)('agrees with indexOf on $name', ({ s }) => {
+    for (const grapheme of new Set(toArray(s))) {
+      expect(includes(s, grapheme)).toBe(indexOf(s, grapheme) !== -1);
+    }
+    expect(includes(s, `${s}x`)).toBe(false);
   });
 });
 

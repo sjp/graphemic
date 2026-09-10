@@ -38,11 +38,16 @@ export interface Match {
  * Yields each non-overlapping occurrence of `needle` in `s` that starts and ends
  * on a grapheme boundary, left to right.
  *
+ * `from` is a non-negative grapheme index to begin at: occurrences starting
+ * before it are not reported, and do not consume the graphemes that follow them.
+ * That is what `indexOf`'s `fromIndex` means, and it is why the run of `'a'` in
+ * `'aaa'` yields a match at 1 when asked from 1 but not when asked from 0.
+ *
  * An empty `needle` yields nothing. It has an occurrence between every pair of
  * graphemes, which is a different operation with a different answer in each
  * caller, so they handle it themselves rather than filtering an infinite stream.
  */
-export function* findMatches(s: string, needle: string): IterableIterator<Match> {
+export function* findMatches(s: string, needle: string, from = 0): IterableIterator<Match> {
   const wanted = [...graphemesOf(needle)];
   if (wanted.length === 0) return;
 
@@ -52,13 +57,15 @@ export function* findMatches(s: string, needle: string): IterableIterator<Match>
   let skip = 0; // graphemes consumed by the match just reported
 
   for (const grapheme of hay) {
-    if (skip > 0) {
-      skip -= 1;
-    } else if (wanted.every((want, k) => hay[graphemeIndex + k] === want)) {
-      // Segmentation is lossless, so a run of graphemes equal to the needle's
-      // graphemes is the needle, code unit for code unit — hence its length.
-      yield { graphemeIndex, start: offset, end: offset + needle.length };
-      skip = wanted.length - 1;
+    if (graphemeIndex >= from) {
+      if (skip > 0) {
+        skip -= 1;
+      } else if (wanted.every((want, k) => hay[graphemeIndex + k] === want)) {
+        // Segmentation is lossless, so a run of graphemes equal to the needle's
+        // graphemes is the needle, code unit for code unit — hence its length.
+        yield { graphemeIndex, start: offset, end: offset + needle.length };
+        skip = wanted.length - 1;
+      }
     }
     graphemeIndex += 1;
     offset += grapheme.length;

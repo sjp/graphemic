@@ -57,6 +57,29 @@ describe('findMatches', () => {
     ]);
   });
 
+  it.each([
+    ['every match when starting at the beginning', 'a,b,c', ',', 0, [1, 3]],
+    ['only the later match when starting past the first', 'a,b,c', ',', 2, [3]],
+    ['nothing when starting past every match', 'a,b,c', ',', 4, []],
+    ['nothing when starting past the end entirely', 'a,b', ',', 99, []],
+    ['a match beginning exactly at the start index', 'a,b', ',', 1, [1]],
+  ] as const)('reports %s', (_label, s, needle, from, expected) => {
+    expect([...findMatches(s, needle, from)].map((match) => match.graphemeIndex)).toEqual(expected);
+  });
+
+  it('does not let a match before the start index consume the graphemes after it', () => {
+    // From 0 the leading 'aa' swallows the middle 'a', so 1 is never reported.
+    // From 1 there is no earlier match to have consumed it.
+    expect([...findMatches('aaa', 'aa', 0)].map((match) => match.graphemeIndex)).toEqual([0]);
+    expect([...findMatches('aaa', 'aa', 1)].map((match) => match.graphemeIndex)).toEqual([1]);
+  });
+
+  it('reports code-unit offsets measured from the string, not from the start index', () => {
+    expect([...findMatches(`${WAVE_MEDIUM}!`, '!', 1)]).toEqual([
+      { graphemeIndex: 1, start: 4, end: 5 },
+    ]);
+  });
+
   it('stops comparing as soon as the consumer stops asking', () => {
     const iterator = findMatches('a'.repeat(1000), 'a');
 

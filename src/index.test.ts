@@ -37,8 +37,12 @@ describe('public surface', () => {
     expect(Object.keys(index.graphemes).toSorted()).toEqual([
       'at',
       'chunk',
+      'includes',
+      'indexOf',
       'iterate',
       'length',
+      'padEnd',
+      'padStart',
       'reverse',
       'slice',
       'split',
