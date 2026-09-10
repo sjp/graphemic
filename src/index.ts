@@ -1,6 +1,7 @@
 /** The package version, replaced at release time. */
 export const VERSION = '0.0.0';
 
+export * as codePoints from './codePoints.js';
 export * as graphemes from './graphemes.js';
 
 export { SegmenterUnavailableError } from './errors.js';

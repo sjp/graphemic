@@ -21,6 +21,7 @@ describe('public surface', () => {
     expect(Object.keys(index).toSorted()).toEqual([
       'SegmenterUnavailableError',
       'VERSION',
+      'codePoints',
       'graphemes',
     ]);
   });
@@ -45,8 +46,25 @@ describe('public surface', () => {
     expect(index.graphemes.truncate).toBe(subpath.truncate);
   });
 
-  it('measures through the namespace', () => {
+  it('exposes codePoints as a module namespace, not an object literal', async () => {
+    const subpath = await import('./codePoints.js');
+
+    // Measuring in code points is offered; reordering or separating them is not.
+    expect(Object.keys(index.codePoints).toSorted()).toEqual([
+      'at',
+      'iterate',
+      'length',
+      'slice',
+      'toArray',
+      'truncate',
+    ]);
+    expect(index.codePoints.length).toBe(subpath.length);
+    expect(index.codePoints.truncate).toBe(subpath.truncate);
+  });
+
+  it('measures through the namespaces', () => {
     expect(index.graphemes.length('hi \u{1F44B}\u{1F3FD}')).toBe(4);
+    expect(index.codePoints.length('hi \u{1F44B}\u{1F3FD}')).toBe(5);
   });
 
   it('exports the boundary types', () => {
