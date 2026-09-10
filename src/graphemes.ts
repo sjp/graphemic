@@ -15,9 +15,16 @@
 
 import { measureAll, sliceRange } from './internal/engine.js';
 import { measureGraphemes } from './internal/measure.js';
-import { graphemesOf } from './internal/segmenter.js';
+import { findMatches } from './internal/search.js';
+import { graphemesOf, segments } from './internal/segmenter.js';
 import { truncateTo } from './internal/truncate.js';
-import { requireNonNegativeInteger, toIntegerOrInfinity } from './internal/validate.js';
+import {
+  requireNonNegativeInteger,
+  requirePositiveInteger,
+  requireString,
+  toIntegerOrInfinity,
+  toUint32,
+} from './internal/validate.js';
 import type { TruncateOptions } from './types.js';
 
 /**
@@ -149,6 +156,93 @@ export function truncate(
   if (s.length <= max) return s;
 
   return truncateTo(s, max, measureGraphemes, 'grapheme', options?.ellipsis);
+}
+
+/** `String.prototype.split`'s own default limit: every element. */
+const UNLIMITED = 2 ** 32 - 1;
+
+/**
+ * Like `String.prototype.split`, but the separator only matches whole graphemes.
+ *
+ * An empty separator splits into graphemes — the safe reading of `s.split('')`,
+ * which otherwise hands back the halves of every surrogate pair. A non-empty
+ * separator must line up with the segmentation of `s` on both ends, so searching
+ * for `'e'` does not find the `e` inside an accented one spelled `e` +
+ * combining acute, and searching for one flag does not find it straddling two
+ * others.
+ *
+ * Matching is exact: a precomposed character does not match its decomposed
+ * spelling. Call `String.prototype.normalize` on both sides first if you need
+ * it to.
+ *
+ * `limit` caps the number of pieces returned and is coerced exactly as
+ * `String.prototype.split` coerces it — which means `Infinity` and `NaN` both
+ * give you nothing, and a negative number gives you everything.
+ *
+ * @example
+ * split('a,b,\u{1F44B}\u{1F3FD}', ','); // ['a', 'b', '\u{1F44B}\u{1F3FD}']
+ * split('\u{1F44B}\u{1F3FD}', ''); // ['\u{1F44B}\u{1F3FD}'] — one grapheme, not four halves
+ * split('e\u0301x', 'e'); // ['e\u0301x'] — the accented e is not an e
+ * split('a,b,c', ',', 2); // ['a', 'b']
+ *
+ * @throws {TypeError} If `separator` is not a string. A RegExp is not accepted;
+ * it would otherwise be coerced to its source text.
+ * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter`.
+ */
+export function split(s: string, separator: string, limit?: number): string[] {
+  requireString('separator', separator);
+  const max = limit === undefined ? UNLIMITED : toUint32(limit);
+  if (max === 0) return [];
+  // Every grapheme is its own piece, and the empty string has none — the one
+  // case where splitting yields fewer than one element, as natively.
+  if (separator === '') return toArray(s).slice(0, max);
+
+  const pieces: string[] = [];
+  let from = 0;
+  for (const { start, end } of findMatches(s, separator)) {
+    pieces.push(s.slice(from, start));
+    from = end;
+    if (pieces.length === max) return pieces;
+  }
+  pieces.push(s.slice(from));
+  return pieces;
+}
+
+/**
+ * Cuts `s` into consecutive pieces of `size` graphemes; the last piece holds
+ * whatever is left over.
+ *
+ * Rejoining the pieces always reproduces `s` exactly, which is the property that
+ * makes this usable for anything that has to survive a round trip — paging text
+ * into fixed-width cells, or over a protocol with a per-message character count.
+ *
+ * @example
+ * chunk('hi \u{1F44B}\u{1F3FD}!', 2); // ['hi', ' \u{1F44B}\u{1F3FD}', '!']
+ * chunk('', 3); // []
+ *
+ * @throws {TypeError} If `size` is not a number.
+ * @throws {RangeError} If `size` is not a positive integer.
+ * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter`.
+ */
+export function chunk(s: string, size: number): string[] {
+  requirePositiveInteger('size', size);
+
+  const pieces: string[] = [];
+  let from = 0;
+  let held = 0;
+  for (const { segment, index } of segments(s)) {
+    held += 1;
+    if (held === size) {
+      const end = index + segment.length;
+      pieces.push(s.slice(from, end));
+      from = end;
+      held = 0;
+    }
+  }
+  // Anything after the last full piece, and nothing at all when `s` divided
+  // evenly — a trailing empty chunk is not a chunk.
+  if (from < s.length) pieces.push(s.slice(from));
+  return pieces;
 }
 
 /**

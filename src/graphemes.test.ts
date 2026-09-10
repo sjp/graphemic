@@ -1,7 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SegmenterUnavailableError } from './errors.js';
-import { at, iterate, length, reverse, slice, toArray, truncate } from './graphemes.js';
+import {
+  at,
+  chunk,
+  iterate,
+  length,
+  reverse,
+  slice,
+  split,
+  toArray,
+  truncate,
+} from './graphemes.js';
 import { resetSegmenterForTests } from './internal/segmenter.js';
 import { corpus } from './test/corpus.js';
 
@@ -12,6 +22,8 @@ const BOTTLE_ZWJ = '\u{1F468}\u200D\u{1F37C}'; // man + ZWJ + baby bottle
 const FAMILY = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}'; // one grapheme, seven code points
 const ELLIPSIS = '\u2026'; // one grapheme, one code point, one code unit, three bytes
 const FLAG_AU = '\u{1F1E6}\u{1F1FA}'; // regional indicators A + U
+const FLAG_UA = '\u{1F1FA}\u{1F1E6}'; // the same two, the other way round
+const E_ACUTE = 'e\u0301'; // "e" + combining acute, one grapheme
 const WAVE = '\u{1F44B}';
 const WAVE_MEDIUM = '\u{1F44B}\u{1F3FD}'; // waving hand + medium skin tone
 const LONE_HIGH_SURROGATE = '\uD83D';
@@ -274,6 +286,142 @@ describe('truncate', () => {
   it.each(corpus)('only marks $name when it actually cut something', ({ s, graphemes }) => {
     expect(truncate(s, graphemes, { ellipsis: ELLIPSIS })).toBe(s);
     expect(truncate(s, graphemes + 1, { ellipsis: ELLIPSIS })).toBe(s);
+  });
+});
+
+describe('split', () => {
+  it.each([
+    ['an emoji on the empty separator', WAVE_MEDIUM, '', [WAVE_MEDIUM]],
+    ['an emoji as an element', `a,b,${WAVE_MEDIUM}`, ',', ['a', 'b', WAVE_MEDIUM]],
+    ['a separator hiding inside a grapheme', `${E_ACUTE}x`, 'e', [`${E_ACUTE}x`]],
+    [
+      'a flag that would have to re-pair',
+      `${FLAG_AU}${FLAG_AU}`,
+      FLAG_UA,
+      [`${FLAG_AU}${FLAG_AU}`],
+    ],
+    ['the empty string on a separator', '', ',', ['']],
+    ['the empty string on the empty separator', '', '', []],
+    ['adjacent separators', 'a,,b', ',', ['a', '', 'b']],
+    ['a separator equal to the input', 'ab', 'ab', ['', '']],
+    ['a separator longer than the input', 'ab', 'abc', ['ab']],
+    ['a lone surrogate as the separator', LONE_BETWEEN_LETTERS, LONE_HIGH_SURROGATE, ['a', 'b']],
+    ['a multi-grapheme separator', `a${FLAG_AU}b${FLAG_AU}c`, FLAG_AU, ['a', 'b', 'c']],
+  ] as const)('splits %s', (_label, input, separator, expected) => {
+    expect(split(input, separator)).toEqual(expected);
+  });
+
+  it.each([
+    ['a limit of two', 'a,b,c', ',', 2, ['a', 'b']],
+    ['a limit of zero', 'a,b,c', ',', 0, []],
+    ['a limit past the end', 'a,b,c', ',', 10, ['a', 'b', 'c']],
+    ['a limit on the empty separator', 'abc', '', 2, ['a', 'b']],
+  ] as const)('honours %s', (_label, input, separator, limit, expected) => {
+    expect(split(input, separator, limit)).toEqual(expected);
+  });
+
+  it.each([
+    ['a limit of undefined', undefined],
+    ['a negative limit', -1],
+    ['a fractional limit', 1.9],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['a limit past 2^32', 2 ** 32 + 2],
+  ] as const)('coerces %s the way String#split does', (_label, limit) => {
+    // The whole point of matching native coercion is that ASCII input, where
+    // every unit coincides, must give byte-identical answers.
+    for (const [s, separator] of [
+      ['a,b,c', ','],
+      ['abc', ''],
+      ['', ','],
+      ['a,,b', ','],
+    ] as const) {
+      expect(split(s, separator, limit)).toEqual(s.split(separator, limit));
+    }
+  });
+
+  it.each([
+    ['a RegExp', /,/],
+    ['undefined', undefined],
+    ['null', null],
+    ['a number', 5],
+  ] as const)('throws a TypeError for %s as the separator', (_label, separator) => {
+    expect(() => split('a,b', separator as unknown as string)).toThrow(TypeError);
+    expect(() => split('a,b', separator as unknown as string)).toThrow(
+      /separator must be a string/,
+    );
+  });
+
+  it('rejects a RegExp separator at compile time too', () => {
+    // @ts-expect-error string separators only; there are no RegExp splits in v1.
+    expect(() => split('a,b', /,/)).toThrow(TypeError);
+  });
+
+  it.each(corpus)('rejoins $name on every separator it contains', ({ s }) => {
+    expect(split(s, '').join('')).toBe(s);
+
+    for (const separator of new Set(toArray(s))) {
+      expect(split(s, separator).join(separator)).toBe(s);
+    }
+  });
+
+  it.each(corpus)('never cuts $name mid-grapheme', ({ s, graphemes }) => {
+    for (const separator of new Set(toArray(s))) {
+      const pieces = split(s, separator);
+
+      expect(pieces.reduce((total, piece) => total + length(piece), 0)).toBe(
+        graphemes - (pieces.length - 1),
+      );
+    }
+  });
+});
+
+describe('chunk', () => {
+  it.each([
+    ['pieces of two', `hi ${WAVE_MEDIUM}!`, 2, ['hi', ` ${WAVE_MEDIUM}`, '!']],
+    ['pieces of one', `a${FLAG_AU}b`, 1, ['a', FLAG_AU, 'b']],
+    ['the empty string', '', 3, []],
+    ['a size larger than the string', HI_WAVE, 100, [HI_WAVE]],
+    ['a size that divides exactly', 'abcd', 2, ['ab', 'cd']],
+    ['a size matching the string exactly', HI_WAVE, 4, [HI_WAVE]],
+    ['a lone surrogate', LONE_BETWEEN_LETTERS, 2, [`a${LONE_HIGH_SURROGATE}`, 'b']],
+  ] as const)('cuts into %s', (_label, input, size, expected) => {
+    expect(chunk(input, size)).toEqual(expected);
+  });
+
+  it('never emits a trailing empty piece', () => {
+    expect(chunk('abcd', 2)).toEqual(['ab', 'cd']);
+    expect(chunk('abcd', 4)).toEqual(['abcd']);
+  });
+
+  it.each([
+    ['zero', 0],
+    ['a negative size', -1],
+    ['a fractional size', 1.5],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['an unsafe integer', Number.MAX_SAFE_INTEGER + 2],
+  ])('throws a RangeError for %s', (_label, size) => {
+    expect(() => chunk(HI_WAVE, size)).toThrow(RangeError);
+    expect(() => chunk(HI_WAVE, size)).toThrow(/size must be a positive integer/);
+  });
+
+  it('throws a TypeError for a size that is not a number', () => {
+    expect(() => chunk(HI_WAVE, '2' as unknown as number)).toThrow(TypeError);
+  });
+
+  it.each(corpus)('cuts $name into pieces that rejoin exactly', ({ s, graphemes }) => {
+    for (let size = 1; size <= graphemes + 1; size++) {
+      const pieces = chunk(s, size);
+
+      expect(pieces.join('')).toBe(s);
+      expect(pieces).toHaveLength(Math.ceil(graphemes / size));
+      for (const [position, piece] of pieces.entries()) {
+        expect(length(piece)).toBe(
+          position === pieces.length - 1 ? graphemes - position * size : size,
+        );
+      }
+    }
   });
 });
 

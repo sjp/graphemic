@@ -36,10 +36,12 @@ describe('public surface', () => {
 
     expect(Object.keys(index.graphemes).toSorted()).toEqual([
       'at',
+      'chunk',
       'iterate',
       'length',
       'reverse',
       'slice',
+      'split',
       'toArray',
       'truncate',
     ]);
