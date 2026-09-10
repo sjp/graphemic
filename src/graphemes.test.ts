@@ -9,6 +9,8 @@ import { corpus } from './test/corpus.js';
 // copy-paste silently NFC-normalise the literal characters.
 const U_DECOMPOSED = 'u\u0308'; // "u" + combining diaeresis
 const BOTTLE_ZWJ = '\u{1F468}\u200D\u{1F37C}'; // man + ZWJ + baby bottle
+const FAMILY = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}'; // one grapheme, seven code points
+const ELLIPSIS = '\u2026'; // one grapheme, one code point, one code unit, three bytes
 const FLAG_AU = '\u{1F1E6}\u{1F1FA}'; // regional indicators A + U
 const WAVE = '\u{1F44B}';
 const WAVE_MEDIUM = '\u{1F44B}\u{1F3FD}'; // waving hand + medium skin tone
@@ -245,6 +247,33 @@ describe('truncate', () => {
 
   it('throws a TypeError for a budget that is not a number', () => {
     expect(() => truncate(HI_WAVE, '4' as unknown as number)).toThrow(TypeError);
+  });
+
+  it.each([
+    ['a budget the ellipsis and seven graphemes fit', GREETING, 8, ELLIPSIS, `hello! ${ELLIPSIS}`],
+    ['a budget that also fits the wave', GREETING, 9, ELLIPSIS, `hello! ${WAVE}${ELLIPSIS}`],
+    ['a string that already fits', HI_WAVE, 4, ELLIPSIS, HI_WAVE],
+    ['an ellipsis that fills the budget', 'hello', 3, '...', '...'],
+    ['an ellipsis that does not fit', 'hello', 2, '...', 'he'],
+    ['a budget of nothing', 'hello', 0, ELLIPSIS, ''],
+    ['an empty ellipsis', 'abc', 5, '', 'abc'],
+    ['an empty ellipsis on a budget that cuts', GREETING, 7, '', 'hello! '],
+    ['a ZWJ sequence as the ellipsis', `a${FAMILY}b`, 2, FAMILY, `a${FAMILY}`],
+  ] as const)('handles %s', (_label, input, max, ellipsis, expected) => {
+    expect(truncate(input, max, { ellipsis })).toBe(expected);
+  });
+
+  it.each(corpus)('never exceeds the budget of $name with an ellipsis', ({ s, graphemes }) => {
+    for (const ellipsis of ['', ELLIPSIS, '...', WAVE_MEDIUM, ' [more]']) {
+      for (let max = 0; max <= graphemes + 1; max++) {
+        expect(length(truncate(s, max, { ellipsis }))).toBeLessThanOrEqual(max);
+      }
+    }
+  });
+
+  it.each(corpus)('only marks $name when it actually cut something', ({ s, graphemes }) => {
+    expect(truncate(s, graphemes, { ellipsis: ELLIPSIS })).toBe(s);
+    expect(truncate(s, graphemes + 1, { ellipsis: ELLIPSIS })).toBe(s);
   });
 });
 

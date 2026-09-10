@@ -26,10 +26,11 @@
  * the slicing machinery.
  */
 
-import { measureAll, prefixEnd, sliceRange } from './internal/engine.js';
+import { measureAll, sliceRange } from './internal/engine.js';
 import { measureUtf8 } from './internal/measure.js';
+import { truncateTo } from './internal/truncate.js';
 import { requireNonNegativeInteger } from './internal/validate.js';
-import type { BoundaryOptions } from './types.js';
+import type { BoundaryOptions, TruncateOptions } from './types.js';
 
 /** Any code unit outside ASCII — the only way a string can need more bytes than code units. */
 const NON_ASCII = /[\u0080-\uFFFF]/;
@@ -93,29 +94,35 @@ export function slice(s: string, start?: number, end?: number, options?: Boundar
  * Keeps at most `max` UTF-8 bytes from the start of `s`.
  *
  * The result always satisfies `length(truncate(s, max)) <= max`, in both
- * boundary modes — which is the whole point when the budget belongs to a column
- * or a protocol field. Returns `s` itself when it already fits, so
- * `truncate(s, max) === s` answers "did anything get cut?".
+ * boundary modes and with any ellipsis — which is the whole point when the
+ * budget belongs to a column or a protocol field. Returns `s` itself when it
+ * already fits, so `truncate(s, max) === s` answers "did anything get cut?", and
+ * an `ellipsis` is only ever added when something was.
  *
  * A character that does not fit is dropped whole: a four-person family emoji is
  * 25 bytes, so truncating it to 24 gives `''` rather than a partial family.
+ *
+ * The ellipsis counts against `max` in bytes, which is where this one bites:
+ * `'…'` is a single character but three bytes, so it leaves three fewer for the
+ * text. If it cannot fit `max` at all, the bare truncation comes back without
+ * it: the budget is never exceeded.
  *
  * @example
  * truncate('hi \u{1F44B}\u{1F3FD}', 7); // 'hi ' — the wave is 4 bytes, its skin tone 4 more
  * truncate('hi \u{1F44B}\u{1F3FD}', 11); // 'hi \u{1F44B}\u{1F3FD}' — unchanged
  * truncate('hi \u{1F44B}\u{1F3FD}', 7, { boundary: 'codePoint' }); // 'hi \u{1F44B}'
+ * truncate('hi \u{1F44B}\u{1F3FD}', 7, { ellipsis: '…' }); // 'hi …' — 3 bytes of it the marker
  *
  * @throws {TypeError} If `max` is not a number.
  * @throws {RangeError} If `max` is not a non-negative integer.
  * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter`
  *   and the default grapheme boundary is used.
  */
-export function truncate(s: string, max: number, options?: BoundaryOptions): string {
+export function truncate(s: string, max: number, options?: TruncateOptions): string {
   requireNonNegativeInteger('max', max);
   // No code unit encodes to more than three bytes, so this settles the common
   // "comfortably under budget" case without walking anything. Loose, but free.
   if (s.length * MAX_BYTES_PER_CODE_UNIT <= max) return s;
 
-  const end = prefixEnd(s, max, measureUtf8, options?.boundary ?? 'grapheme');
-  return end === s.length ? s : s.slice(0, end);
+  return truncateTo(s, max, measureUtf8, options?.boundary ?? 'grapheme', options?.ellipsis);
 }

@@ -13,10 +13,12 @@
  * `reverse` or the slicing machinery.
  */
 
-import { measureAll, prefixEnd, sliceRange } from './internal/engine.js';
+import { measureAll, sliceRange } from './internal/engine.js';
 import { measureGraphemes } from './internal/measure.js';
 import { graphemesOf } from './internal/segmenter.js';
+import { truncateTo } from './internal/truncate.js';
 import { requireNonNegativeInteger, toIntegerOrInfinity } from './internal/validate.js';
+import type { TruncateOptions } from './types.js';
 
 /**
  * The number of graphemes in `s`.
@@ -119,24 +121,34 @@ export function slice(s: string, start?: number, end?: number): string {
  * Keeps at most `max` graphemes from the start of `s`.
  *
  * Returns `s` itself when it already fits, so `truncate(s, max) === s` answers
- * "did anything get cut?".
+ * "did anything get cut?" — and an `ellipsis` is only ever added when something
+ * was.
+ *
+ * The ellipsis counts against `max`, in graphemes, so `'…'` costs one and
+ * `'...'` costs three. If it cannot fit `max` at all, the bare truncation comes
+ * back without it: the budget is never exceeded.
  *
  * @example
  * truncate('hello! \u{1F44B} nice to meet you', 8); // 'hello! \u{1F44B}'
  * truncate('hi \u{1F44B}\u{1F3FD}', 5); // 'hi \u{1F44B}\u{1F3FD}' — unchanged
+ * truncate('hello! \u{1F44B} nice to meet you', 8, { ellipsis: '…' }); // 'hello! …'
+ * truncate('hello', 2, { ellipsis: '...' }); // 'he' — no room for the dots
  *
  * @throws {TypeError} If `max` is not a number.
  * @throws {RangeError} If `max` is not a non-negative integer.
  * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter`.
  */
-export function truncate(s: string, max: number): string {
+export function truncate(
+  s: string,
+  max: number,
+  options?: Omit<TruncateOptions, 'boundary'>,
+): string {
   requireNonNegativeInteger('max', max);
   // A string never has more graphemes than code units, so this settles the
   // "it already fits" case without segmenting at all.
   if (s.length <= max) return s;
 
-  const end = prefixEnd(s, max, measureGraphemes, 'grapheme');
-  return end === s.length ? s : s.slice(0, end);
+  return truncateTo(s, max, measureGraphemes, 'grapheme', options?.ellipsis);
 }
 
 /**

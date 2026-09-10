@@ -20,10 +20,11 @@
  * the slicing machinery.
  */
 
-import { measureAll, prefixEnd, sliceRange } from './internal/engine.js';
+import { measureAll, sliceRange } from './internal/engine.js';
 import { measureCodePoints } from './internal/measure.js';
+import { truncateTo } from './internal/truncate.js';
 import { requireNonNegativeInteger, toIntegerOrInfinity } from './internal/validate.js';
-import type { BoundaryOptions } from './types.js';
+import type { BoundaryOptions, TruncateOptions } from './types.js';
 
 /** Any surrogate at all — the only way a string can hold fewer code points than code units. */
 const SURROGATE = /[\uD800-\uDFFF]/;
@@ -131,26 +132,31 @@ export function slice(s: string, start?: number, end?: number, options?: Boundar
  * Keeps at most `max` code points from the start of `s`.
  *
  * Returns `s` itself when it already fits, so `truncate(s, max) === s` answers
- * "did anything get cut?". The cut snaps inward to a grapheme boundary by
- * default; `{ boundary: 'codePoint' }` opts out, and still never splits a
- * surrogate pair.
+ * "did anything get cut?" — and an `ellipsis` is only ever added when something
+ * was. The cut snaps inward to a grapheme boundary by default;
+ * `{ boundary: 'codePoint' }` opts out, and still never splits a surrogate
+ * pair.
+ *
+ * The ellipsis counts against `max`, in code points, so `'…'` costs one and a
+ * skin-toned wave costs two. If it cannot fit `max` at all, the bare truncation
+ * comes back without it: the budget is never exceeded.
  *
  * @example
  * truncate('hi \u{1F44B}\u{1F3FD}', 5); // 'hi \u{1F44B}\u{1F3FD}' — unchanged
  * truncate('hi \u{1F44B}\u{1F3FD}', 4); // 'hi '
  * truncate('hi \u{1F44B}\u{1F3FD}', 4, { boundary: 'codePoint' }); // 'hi \u{1F44B}'
+ * truncate('hi \u{1F44B}\u{1F3FD}', 4, { ellipsis: '…' }); // 'hi …'
  *
  * @throws {TypeError} If `max` is not a number.
  * @throws {RangeError} If `max` is not a non-negative integer.
  * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter`
  *   and the default grapheme boundary is used.
  */
-export function truncate(s: string, max: number, options?: BoundaryOptions): string {
+export function truncate(s: string, max: number, options?: TruncateOptions): string {
   requireNonNegativeInteger('max', max);
   // A string never has more code points than code units, so this settles the
   // "it already fits" case without walking anything.
   if (s.length <= max) return s;
 
-  const end = prefixEnd(s, max, measureCodePoints, options?.boundary ?? 'grapheme');
-  return end === s.length ? s : s.slice(0, end);
+  return truncateTo(s, max, measureCodePoints, options?.boundary ?? 'grapheme', options?.ellipsis);
 }

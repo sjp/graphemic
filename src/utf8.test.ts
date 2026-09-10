@@ -17,6 +17,7 @@ const FAMILY = `${MAN}${ZWJ}\u{1F469}${ZWJ}\u{1F467}${ZWJ}\u{1F466}`; // 25 byte
 const REGIONAL_A = '\u{1F1E6}';
 const REGIONAL_U = '\u{1F1FA}';
 const FLAG_AU = `${REGIONAL_A}${REGIONAL_U}`; // 8 bytes
+const ELLIPSIS = '\u2026'; // horizontal ellipsis: one character, three bytes
 const WAVE = '\u{1F44B}'; // 4 bytes
 const SKIN_MEDIUM = '\u{1F3FD}'; // medium skin tone modifier, 4 bytes
 const WAVE_MEDIUM = `${WAVE}${SKIN_MEDIUM}`;
@@ -25,6 +26,7 @@ const LONE_HIGH_SURROGATE = '\uD83D'; // 3 bytes once the encoder substitutes U+
 const HI_WAVE = `hi ${WAVE_MEDIUM}`; // 11 bytes, 7 code units
 const A_WAVE_B = `a${WAVE}b`; // 6 bytes: a is byte 0, the wave 1-4, b byte 5
 const MIXED_WIDTHS = 'a\u00A3\u20AC\u{1F44B}'; // 1 + 2 + 3 + 4 bytes
+const GREETING = `hello! ${WAVE} nice to meet you`; // 28 bytes
 
 const CODE_POINT = { boundary: 'codePoint' } as const;
 
@@ -196,5 +198,49 @@ describe('truncate', () => {
 
   it('throws a TypeError for a budget that is not a number', () => {
     expect(() => truncate(HI_WAVE, '4' as unknown as number)).toThrow(TypeError);
+  });
+
+  it.each([
+    [
+      'a budget three of whose bytes go on the ellipsis',
+      GREETING,
+      10,
+      ELLIPSIS,
+      `hello! ${ELLIPSIS}`,
+    ],
+    ['a budget that also fits the wave', GREETING, 14, ELLIPSIS, `hello! ${WAVE}${ELLIPSIS}`],
+    ['a string that already fits', HI_WAVE, 11, ELLIPSIS, HI_WAVE],
+    ['an ellipsis that fills the budget', 'hello', 3, ELLIPSIS, ELLIPSIS],
+    ['an ellipsis that does not fit', 'caf\u00E9', 2, ELLIPSIS, 'ca'],
+    ['an ASCII ellipsis, which costs the same three bytes', GREETING, 10, '...', 'hello! ...'],
+    ['a budget of nothing', HI_WAVE, 0, ELLIPSIS, ''],
+    ['an empty ellipsis', HI_WAVE, 10, '', 'hi '],
+  ] as const)('handles %s', (_label, input, max, ellipsis, expected) => {
+    expect(truncate(input, max, { ellipsis })).toBe(expected);
+  });
+
+  it('charges the ellipsis in bytes when the caller opts out too', () => {
+    // Seven bytes are left for the content either way; only where they can be
+    // spent differs.
+    expect(truncate(`${HI_WAVE}!`, 10, { ellipsis: ELLIPSIS })).toBe(`hi ${ELLIPSIS}`);
+    expect(truncate(`${HI_WAVE}!`, 10, { ...CODE_POINT, ellipsis: ELLIPSIS })).toBe(
+      `hi ${WAVE}${ELLIPSIS}`,
+    );
+  });
+
+  it.each(corpus)('never exceeds the budget of $name with an ellipsis', ({ s, utf8 }) => {
+    for (const ellipsis of ['', ELLIPSIS, '...', WAVE_MEDIUM, ' [more]']) {
+      for (let max = 0; max <= utf8 + 1; max++) {
+        expect(encodedLength(truncate(s, max, { ellipsis }))).toBeLessThanOrEqual(max);
+        expect(encodedLength(truncate(s, max, { ...CODE_POINT, ellipsis }))).toBeLessThanOrEqual(
+          max,
+        );
+      }
+    }
+  });
+
+  it.each(corpus)('only marks $name when it actually cut something', ({ s, utf8 }) => {
+    expect(truncate(s, utf8, { ellipsis: ELLIPSIS })).toBe(s);
+    expect(truncate(s, utf8, { ...CODE_POINT, ellipsis: ELLIPSIS })).toBe(s);
   });
 });

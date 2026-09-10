@@ -14,6 +14,7 @@ const BOTTLE_ZWJ = `${MAN}${ZWJ}\u{1F37C}`; // man + ZWJ + baby bottle
 const REGIONAL_A = '\u{1F1E6}';
 const REGIONAL_U = '\u{1F1FA}';
 const FLAG_AU = `${REGIONAL_A}${REGIONAL_U}`;
+const ELLIPSIS = '\u2026'; // horizontal ellipsis: one character, one code point, one code unit
 const WAVE = '\u{1F44B}';
 const SKIN_MEDIUM = '\u{1F3FD}'; // medium skin tone modifier
 const WAVE_MEDIUM = `${WAVE}${SKIN_MEDIUM}`;
@@ -256,5 +257,47 @@ describe('truncate', () => {
 
   it('throws a TypeError for a budget that is not a number', () => {
     expect(() => truncate(HI_WAVE, '4' as unknown as number)).toThrow(TypeError);
+  });
+
+  it.each([
+    [
+      'a budget the ellipsis and seven code points fit',
+      GREETING,
+      8,
+      ELLIPSIS,
+      `hello! ${ELLIPSIS}`,
+    ],
+    ['a budget that also fits the wave', GREETING, 9, ELLIPSIS, `hello! ${WAVE}${ELLIPSIS}`],
+    ['a string that already fits', HI_WAVE, 5, ELLIPSIS, HI_WAVE],
+    ['an ellipsis that fills the budget', 'hello', 3, '...', '...'],
+    ['an ellipsis that does not fit', 'hello', 2, '...', 'he'],
+    ['a budget of nothing', HI_WAVE, 0, ELLIPSIS, ''],
+    ['an empty ellipsis', HI_WAVE, 4, '', 'hi '],
+    ['a skin-toned wave as the ellipsis', GREETING, 9, WAVE_MEDIUM, `hello! ${WAVE_MEDIUM}`],
+  ] as const)('handles %s', (_label, input, max, ellipsis, expected) => {
+    expect(truncate(input, max, { ellipsis })).toBe(expected);
+  });
+
+  it('charges the ellipsis in code points when the caller opts out too', () => {
+    // Four code points are left for the content either way; only where they can
+    // be spent differs.
+    expect(truncate(`${HI_WAVE}!`, 5, { ellipsis: ELLIPSIS })).toBe(`hi ${ELLIPSIS}`);
+    expect(truncate(`${HI_WAVE}!`, 5, { ...CODE_POINT, ellipsis: ELLIPSIS })).toBe(
+      `hi ${WAVE}${ELLIPSIS}`,
+    );
+  });
+
+  it.each(corpus)('never exceeds the budget of $name with an ellipsis', ({ s, codePoints }) => {
+    for (const ellipsis of ['', ELLIPSIS, '...', WAVE_MEDIUM, ' [more]']) {
+      for (let max = 0; max <= codePoints + 1; max++) {
+        expect(length(truncate(s, max, { ellipsis }))).toBeLessThanOrEqual(max);
+        expect(length(truncate(s, max, { ...CODE_POINT, ellipsis }))).toBeLessThanOrEqual(max);
+      }
+    }
+  });
+
+  it.each(corpus)('only marks $name when it actually cut something', ({ s, codePoints }) => {
+    expect(truncate(s, codePoints, { ellipsis: ELLIPSIS })).toBe(s);
+    expect(truncate(s, codePoints, { ...CODE_POINT, ellipsis: ELLIPSIS })).toBe(s);
   });
 });
