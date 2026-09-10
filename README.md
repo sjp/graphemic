@@ -1,5 +1,7 @@
 # @sjpnz/graphemic
 
+[![CI](https://github.com/sjp/graphemic/actions/workflows/ci.yml/badge.svg)](https://github.com/sjp/graphemic/actions/workflows/ci.yml)
+
 Grapheme-safe string operations: length, slice, truncate, split, pad and search
 that never break a user-visible character.
 

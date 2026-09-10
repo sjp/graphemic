@@ -63,6 +63,7 @@
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
+    "lint:package": "publint && attw --pack --profile esm-only",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "test": "vitest run",
@@ -72,10 +73,12 @@
     "prepublishOnly": "npm run clean && npm run check && npm run build"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "@types/node": "^26.5.1",
     "@vitest/coverage-v8": "^5.0.0",
     "oxfmt": "^0.67.0",
     "oxlint": "^1.82.0",
+    "publint": "^0.3.24",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
   },
