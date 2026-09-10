@@ -28,3 +28,8 @@ npm_root=$(npm root -g)
 if [ -d "$npm_root/@anthropic-ai" ]; then
     sudo chown -R "$(id -u):$(id -g)" "$npm_root/@anthropic-ai"
 fi
+
+# Install the project's dev dependencies so the container can build and test.
+if [ -f package-lock.json ]; then
+    npm ci
+fi

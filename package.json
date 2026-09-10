@@ -1,0 +1,85 @@
+{
+  "name": "@sjpnz/graphemic",
+  "version": "0.0.0",
+  "description": "Grapheme-safe string operations: length, slice, truncate, split, pad and search that never break a user-visible character.",
+  "keywords": [
+    "Intl.Segmenter",
+    "emoji",
+    "grapheme",
+    "grapheme-cluster",
+    "graphemes",
+    "slice",
+    "string",
+    "truncate",
+    "unicode",
+    "utf-16",
+    "utf-8"
+  ],
+  "homepage": "https://github.com/sjp/graphemic#readme",
+  "bugs": {
+    "url": "https://github.com/sjp/graphemic/issues"
+  },
+  "license": "MIT",
+  "author": "Simon Potter",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sjp/graphemic.git"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./graphemes": {
+      "types": "./dist/graphemes.d.ts",
+      "default": "./dist/graphemes.js"
+    },
+    "./code-points": {
+      "types": "./dist/codePoints.d.ts",
+      "default": "./dist/codePoints.js"
+    },
+    "./code-units": {
+      "types": "./dist/codeUnits.d.ts",
+      "default": "./dist/codeUnits.js"
+    },
+    "./utf8": {
+      "types": "./dist/utf8.d.ts",
+      "default": "./dist/utf8.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
+    "prepublishOnly": "npm run clean && npm run check && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "@vitest/coverage-v8": "^5.0.0",
+    "oxfmt": "^0.67.0",
+    "oxlint": "^1.82.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
