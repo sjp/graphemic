@@ -1,4 +1,10 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["src/**/*.test.ts"]
+  // The published library targets any runtime with Intl.Segmenter, so it is
+  // built without Node's globals: reaching for one is a build error, not a
+  // browser bug reported later. Only the tests may assume Node.
+  "compilerOptions": {
+    "types": []
+  },
+  "exclude": ["src/**/*.test.ts", "src/test"]
 }

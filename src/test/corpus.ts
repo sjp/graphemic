@@ -1,0 +1,222 @@
+/**
+ * Strings that break naive code, with their sizes in all four units.
+ *
+ * The counts are committed literals, deliberately. They were computed once with
+ * the reference oracles below and written down, so that a future ICU or runtime
+ * change that alters one of them fails a test instead of being silently
+ * re-derived.
+ *
+ * Every fixture whose form is invisible in an editor - combining marks, ZWJ,
+ * variation selectors, decomposed Hangul, zero-width and bidi characters, lone
+ * surrogates - is written with `\u` escapes, never as a literal character.
+ * Editors, formatters and plain copy-paste all NFC-normalise a decomposed
+ * sequence without anyone noticing, which quietly turns the interesting fixture
+ * into the boring one. That happened twice while assembling this file.
+ */
+
+// Test-only, so a Node import is fine here; nothing in the library itself
+// reaches for a runtime global beyond `Intl`.
+import { TextEncoder } from 'node:util';
+
+export interface Fixture {
+  readonly name: string;
+  readonly s: string;
+  readonly graphemes: number;
+  readonly codePoints: number;
+  readonly codeUnits: number;
+  readonly utf8: number;
+}
+
+export const corpus: readonly Fixture[] = [
+  { name: 'empty', s: '', graphemes: 0, codePoints: 0, codeUnits: 0, utf8: 0 },
+  { name: 'ascii', s: 'hello', graphemes: 5, codePoints: 5, codeUnits: 5, utf8: 5 },
+  {
+    // 'café £'
+    name: 'latin-1',
+    s: 'caf\u00E9 \u00A3',
+    graphemes: 6,
+    codePoints: 6,
+    codeUnits: 6,
+    utf8: 8,
+  },
+  {
+    // 'u' + combining diaeresis
+    name: 'u with combining diaeresis',
+    s: 'u\u0308',
+    graphemes: 1,
+    codePoints: 2,
+    codeUnits: 2,
+    utf8: 3,
+  },
+  {
+    // the same character, precomposed
+    name: 'precomposed u with diaeresis',
+    s: '\u00FC',
+    graphemes: 1,
+    codePoints: 1,
+    codeUnits: 1,
+    utf8: 2,
+  },
+  { name: 'waving hand', s: '\u{1F44B}', graphemes: 1, codePoints: 1, codeUnits: 2, utf8: 4 },
+  {
+    // waving hand + medium skin tone modifier
+    name: 'waving hand with skin tone',
+    s: '\u{1F44B}\u{1F3FD}',
+    graphemes: 1,
+    codePoints: 2,
+    codeUnits: 4,
+    utf8: 8,
+  },
+  {
+    // man + ZWJ + baby bottle
+    name: 'ZWJ man feeding baby',
+    s: '\u{1F468}\u200D\u{1F37C}',
+    graphemes: 1,
+    codePoints: 3,
+    codeUnits: 5,
+    utf8: 11,
+  },
+  {
+    // man + woman + girl + boy, joined by ZWJ
+    name: 'ZWJ family of four',
+    s: '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}',
+    graphemes: 1,
+    codePoints: 7,
+    codeUnits: 11,
+    utf8: 25,
+  },
+  {
+    // regional indicators A + U
+    name: 'flag AU',
+    s: '\u{1F1E6}\u{1F1FA}',
+    graphemes: 1,
+    codePoints: 2,
+    codeUnits: 4,
+    utf8: 8,
+  },
+  {
+    // AU followed by NZ: the segmenter must pair them up 2-and-2
+    name: 'two flags',
+    s: '\u{1F1E6}\u{1F1FA}\u{1F1F3}\u{1F1FF}',
+    graphemes: 2,
+    codePoints: 4,
+    codeUnits: 8,
+    utf8: 16,
+  },
+  {
+    // digit one + variation selector-16 + combining enclosing keycap
+    name: 'keycap digit one',
+    s: '1\uFE0F\u20E3',
+    graphemes: 1,
+    codePoints: 3,
+    codeUnits: 3,
+    utf8: 7,
+  },
+  {
+    // heavy black heart + variation selector-16
+    name: 'heart with variation selector',
+    s: '\u2764\uFE0F',
+    graphemes: 1,
+    codePoints: 2,
+    codeUnits: 2,
+    utf8: 6,
+  },
+  {
+    // ka + virama + ssa + vowel sign i
+    name: 'Devanagari conjunct',
+    s: '\u0915\u094D\u0937\u093F',
+    graphemes: 1,
+    codePoints: 4,
+    codeUnits: 4,
+    utf8: 12,
+  },
+  {
+    // hieuh + a + nieun: one syllable spelled as three jamo
+    name: 'Hangul jamo, decomposed',
+    s: '\u1112\u1161\u11AB',
+    graphemes: 1,
+    codePoints: 3,
+    codeUnits: 3,
+    utf8: 9,
+  },
+  {
+    // no no + mai tho + sara am
+    name: 'Thai with tone mark',
+    s: '\u0E19\u0E49\u0E33',
+    graphemes: 1,
+    codePoints: 3,
+    codeUnits: 3,
+    utf8: 9,
+  },
+  {
+    // meem, hah, meem, dal with damma, fatha, fatha + shadda
+    name: 'Arabic with tashkeel',
+    s: '\u0645\u064F\u062D\u064E\u0645\u064E\u0651\u062F',
+    graphemes: 4,
+    codePoints: 8,
+    codeUnits: 8,
+    utf8: 16,
+  },
+  { name: 'CRLF', s: '\r\n', graphemes: 1, codePoints: 2, codeUnits: 2, utf8: 2 },
+  { name: 'LF then CR', s: '\n\r', graphemes: 2, codePoints: 2, codeUnits: 2, utf8: 2 },
+  { name: 'lone high surrogate', s: '\uD83D', graphemes: 1, codePoints: 1, codeUnits: 1, utf8: 3 },
+  { name: 'lone low surrogate', s: '\uDC4B', graphemes: 1, codePoints: 1, codeUnits: 1, utf8: 3 },
+  {
+    // a low surrogate before a high one: never a pair
+    name: 'reversed surrogate pair',
+    s: '\uDC4B\uD83D',
+    graphemes: 2,
+    codePoints: 2,
+    codeUnits: 2,
+    utf8: 6,
+  },
+  {
+    name: 'lone surrogate between letters',
+    s: 'a\uD83Db',
+    graphemes: 3,
+    codePoints: 3,
+    codeUnits: 3,
+    utf8: 5,
+  },
+  {
+    name: 'greeting with a wave',
+    s: 'hello! \u{1F44B} nice to meet you',
+    graphemes: 25,
+    codePoints: 25,
+    codeUnits: 26,
+    utf8: 28,
+  },
+  {
+    name: 'hi with a skin-toned wave',
+    s: 'hi \u{1F44B}\u{1F3FD}',
+    graphemes: 4,
+    codePoints: 5,
+    codeUnits: 7,
+    utf8: 11,
+  },
+  {
+    name: 'zero-width space',
+    s: 'a\u200Bb',
+    graphemes: 3,
+    codePoints: 3,
+    codeUnits: 3,
+    utf8: 5,
+  },
+  {
+    name: 'right-to-left mark',
+    s: 'a\u200Fb',
+    graphemes: 3,
+    codePoints: 3,
+    codeUnits: 3,
+    utf8: 5,
+  },
+];
+
+/** The reference oracles the corpus counts were computed from. */
+export const oracles = {
+  graphemes: (s: string): number =>
+    [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s)].length,
+  codePoints: (s: string): number => [...s].length,
+  codeUnits: (s: string): number => s.length,
+  utf8: (s: string): number => new TextEncoder().encode(s).length,
+} as const;
