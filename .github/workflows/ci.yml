@@ -47,9 +47,11 @@ jobs:
       - run: npm run typecheck:bench
       - run: npm run lint:package
 
-  # Guard the two promises that are easy to break by accident: no runtime
-  # dependencies, and a package small enough that it cannot be carrying
-  # bundled Unicode tables.
+  # Guard the promises that are easy to break by accident and invisible in a
+  # diff: no runtime dependencies, a package too small to be carrying bundled
+  # Unicode tables, no work done at import time, and a bundle that grows with
+  # the functions a caller uses rather than with the library. All of them are
+  # claims about the built output, so this job builds before it checks.
   package:
     runs-on: ubuntu-latest
     needs: check
@@ -63,3 +65,9 @@ jobs:
       - run: npm run build
       - name: Inspect package contents and size
         run: node .github/scripts/check-package.mjs
+      # `"sideEffects": false` is taken on trust by every bundler, so it is
+      # checked here instead: a top-level call in dist is either a dropped
+      # effect in someone's application or a module that can never be shaken.
+      - name: Check nothing runs at import time
+        run: node .github/scripts/check-side-effects.mjs
+      - run: npm run test:bundle

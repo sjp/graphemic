@@ -80,6 +80,8 @@ function tsBlocks(markdown: string): Block[] {
 }
 
 const IMPORT = /^import\s+\{(?<names>[^}]+)\}\s+from\s+'(?<from>[^']+)';$/;
+/** `import * as graphemes from '@sjpnz/graphemic/graphemes'` — a whole namespace. */
+const NAMESPACE_IMPORT = /^import\s+\*\s+as\s+(?<alias>\w+)\s+from\s+'(?<from>[^']+)';$/;
 /** A statement with a trailing comment: the code, then what it should produce. */
 const CHECKED = /^(?<indent>\s*)(?<expression>\S.*?);\s*\/\/\s*(?<expected>.+)$/;
 /** Anything that is not an expression, so its trailing comment is just a comment. */
@@ -117,6 +119,18 @@ function prepare(block: Block): Prepared {
   block.code.forEach((line, offset) => {
     const lineNumber = block.line + offset;
     const where = `README.md:${lineNumber}`;
+
+    const namespace = NAMESPACE_IMPORT.exec(line);
+    if (namespace?.groups) {
+      const module = ENTRY_POINTS[namespace.groups['from'] ?? ''];
+      if (module === undefined) {
+        failures.push(`${where}: '${namespace.groups['from']}' is not an entry point`);
+        return;
+      }
+      scope.set(namespace.groups['alias'] ?? '', module);
+      body.push('');
+      return;
+    }
 
     const imported = IMPORT.exec(line);
     if (imported?.groups) {

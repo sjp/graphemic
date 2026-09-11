@@ -1,0 +1,18 @@
+{
+  // The bundle suite sits beside `src` so it is never published, and it can only
+  // be checked usefully alongside the build it bundles — same reasoning as
+  // `tsconfig.bench.json`, and the same `rootDir` move up to the repository root
+  // for files that live outside `src`. Nothing here is emitted.
+  //
+  // The fixtures are plain `.mjs`: they are the input to two bundlers, one of
+  // which would need a TypeScript plugin to read them, and there is nothing in a
+  // three-line program for a type to say.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "rootDir": "."
+  },
+  "include": ["test"]
+}

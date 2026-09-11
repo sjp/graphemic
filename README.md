@@ -55,15 +55,34 @@ truncateBytes('hello! 👋 nice to meet you', 11); // 'hello! 👋'
 ```
 
 Both are backed by the same functions — there is one implementation of each —
-and both tree-shake: a caller who only measures strings ships neither the
-slicing machinery nor the search matcher. The entry points are
-`@sjpnz/graphemic/graphemes`, `/code-points`, `/code-units` and `/utf8`.
+and the subpath style tree-shakes under every bundler: a caller who only
+measures strings ships neither the slicing machinery nor the search matcher,
+which is around 0.6 KB gzipped against the 2.6 KB the whole library costs. The
+entry points are `@sjpnz/graphemic/graphemes`, `/code-points`, `/code-units`
+and `/utf8`.
 
-One caveat, and it applies to every library that ships namespaces: bundlers can
-only drop what they can see is unused. `graphemes.truncate(s, 8)` is a static
-member access and shakes; `graphemes[name](s, 8)`, `{ ...graphemes }` and
-passing `graphemes` around as a value all retain the whole namespace. Use the
-subpath style if you need to do any of that.
+The root entry point shakes too under Rollup, rolldown and webpack, which
+rewrite `graphemes.length` into a reference to the function itself. **esbuild is
+the exception**: a namespace that reaches it through a re-export becomes an
+object of getters its analysis cannot see through, so
+`import { graphemes } from '@sjpnz/graphemic'` keeps the whole namespace — about
+2.0 KB gzipped rather than 0.6 KB. Vite is unaffected, because its production
+builds go through Rollup. If esbuild or tsup bundles your application and those
+bytes matter, take the namespace from the unit's own entry point instead: it
+shakes everywhere and reads the same at the call site.
+
+```ts
+import * as graphemes from '@sjpnz/graphemic/graphemes';
+
+graphemes.length('hi 👋🏽'); // 4
+```
+
+One caveat applies whichever entry point you use, and to every library that
+ships namespaces: bundlers can only drop what they can see is unused.
+`graphemes.truncate(s, 8)` is a static member access and shakes;
+`graphemes[name](s, 8)`, `{ ...graphemes }` and passing `graphemes` around as a
+value all retain the whole namespace. Use the named-function style if you need
+to do any of that.
 
 ## Which unit do you mean?
 

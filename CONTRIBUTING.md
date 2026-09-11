@@ -27,6 +27,7 @@ before opening a pull request and there should be no surprises.
 | `npm run lint`          | oxlint                                                  |
 | `npm run format`        | oxfmt, in place (`format:check` to only ask)            |
 | `npm run build`         | `dist/`, ESM with declarations and source maps          |
+| `npm run test:bundle`   | Builds, then bundles the package as a caller would      |
 | `npm run bench`         | Benchmarks against the built output — see below         |
 
 Tests are colocated: `src/graphemes.ts` is tested by `src/graphemes.test.ts`.
@@ -55,6 +56,54 @@ Two related invariants, both tested:
   characters. Anything that measures the whole string before consulting the
   budget will show up as a benchmark regression of several orders of magnitude,
   not a few percent.
+
+## What a caller ships
+
+Two of the README's claims are about bundles rather than about behaviour: every
+entry point tree-shakes, so size grows with the functions used and not with the
+library, and importing the package does nothing until something is called.
+Neither can be checked by reading the source, so `npm run test:bundle` checks
+them against the built output. It is not part of `npm test` because it needs a
+`dist/` to bundle.
+
+Three rules for any module under `src/`, because `"sideEffects": false` in
+package.json is a promise every bundler takes on trust:
+
+- **Nothing runs at import time.** Allowed at the top level: declarations, and
+  bindings to something inert — a literal, a regular expression, an arrow
+  function, a `let` left undefined. Not a call, not `Object.freeze`, not
+  `new Intl.Segmenter`. The segmenter is built on first use and cached, which is
+  what lets `codeUnits.length` reach a caller with no segmenter in the bundle at
+  all. `.github/scripts/check-side-effects.mjs` parses `dist/` and enforces
+  this; an unavoidable call needs a `/* @__PURE__ */` annotation, the same
+  escape hatch bundlers honour.
+- **Import internals per function, never through a barrel.** A module that
+  imports everything its functions between them might need hands the bundler one
+  indivisible unit.
+- **Prefer one more small helper to one more branch.** The ellipsis handling is
+  its own function so that `slice` does not carry it.
+
+`test/bundle/` bundles the programs in `fixtures/` — the two import styles from
+the README, a namespace taken from a subpath, one named function, and the entire
+public surface as an upper bound — with esbuild and with Rollup, resolving
+`@sjpnz/graphemic` by name through the package's own `exports` map so that the
+map is part of what is being tested. Each bundle is then checked three ways:
+functions nobody asked for are gone, the size is within budget, and running it
+with `node` still prints the right answer.
+
+`budgets.json` holds those budgets in minified, gzipped bytes, per fixture and
+per bundler. They are recorded measurements with a little headroom rather than
+targets anyone chose, and a failure means "a common import got bigger — was that
+intended?". If it was, update the number in the same change, and if it was not,
+the retained-name assertions usually name the function that came along for the
+ride.
+
+One budget is several times its siblings. esbuild cannot shake a namespace that
+reaches it through a re-export — it becomes an object of getters — so the
+`import { graphemes } from '@sjpnz/graphemic'` fixture retains all thirteen
+grapheme functions under esbuild, and a test asserts that it does. That test is a
+canary rather than an endorsement: when esbuild learns to see through it, the
+assertion fails, the budget drops, and the README's warning about it can go.
 
 ## Adding a corpus fixture
 
@@ -136,9 +185,11 @@ indexing text by byte offset is the habit the package exists to break. A pull
 request adding `codePoints.reverse` will be turned down on those grounds rather
 than on quality.
 
-`issues/016-future-ideas.md` records what was considered and deliberately left
-out of v1, with the reasoning. If you are proposing something from that list,
-start by saying what has changed.
+Several other things — word and sentence boundaries, RegExp separators for
+`split`, a locale option, width-aware operations, a polyfill for runtimes with
+no `Intl.Segmenter` — were considered for v1 and deliberately left out, each
+because it is a larger question than it looks. If you are proposing one of
+them, start by saying what has changed.
 
 ## Style
 
