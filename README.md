@@ -374,8 +374,10 @@ Segmentation comes from the runtime's own ICU data, so the Unicode version is
 the runtime's, not this package's: a character introduced after your runtime's
 Unicode version may segment as several. Every CI run prints the versions it
 used; the Node 26.7 that produced the benchmark numbers below ships ICU 78.3 and
-Unicode 17.0. The repository also carries the Unicode Consortium's own grapheme
-break test, run against whatever runtime you point it at:
+Unicode 17.0. A version of this package is therefore not a promise about how any
+particular string segments: upgrading Node can change that, and no release here
+will announce it. The repository also carries the Unicode Consortium's own
+grapheme break test, run against whatever runtime you point it at:
 
 ```sh
 UNICODE_CONFORMANCE=1 npm test

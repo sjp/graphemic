@@ -70,4 +70,9 @@ jobs:
       # effect in someone's application or a module that can never be shaken.
       - name: Check nothing runs at import time
         run: node .github/scripts/check-side-effects.mjs
+      # The version is written down in two places that nothing keeps in step
+      # automatically. Catching drift here means a release tag is not the first
+      # time anyone finds out.
+      - name: Check package.json and the built VERSION agree
+        run: node .github/scripts/check-version.mjs
       - run: npm run test:bundle

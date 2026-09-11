@@ -5,9 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Segmentation comes from the runtime's own ICU data, so a string may segment
+differently under a newer Node without anything here changing. Those shifts
+belong to the runtime's Unicode version and are not released, or releasable, by
+this package.
+
 ## [Unreleased]
+
+## [0.1.0] - 2026-09-11
 
 ### Added
 
-- Initial package scaffold: ESM-only build, TypeScript configuration, Vitest,
-  oxlint and oxfmt.
+- `graphemes`: `length`, `iterate`, `toArray`, `at`, `slice`, `truncate`,
+  `split`, `chunk`, `reverse`, `padStart`, `padEnd`, `indexOf` and `includes`,
+  all measured and cut in user-visible characters.
+- `codePoints`: `length`, `iterate`, `toArray`, `at`, `slice` and `truncate`.
+- `codeUnits` and `utf8`: `length`, `slice` and `truncate`, for the UTF-16 and
+  byte budgets that databases and protocols impose.
+- Every operation cuts only on a grapheme boundary, whatever it measures in.
+  Ranges that land mid-character snap inward, so a result is the whole
+  characters fully contained in the range asked for — never more, never half of
+  one. `{ boundary: 'codePoint' }` opts out per call and still never splits a
+  surrogate pair.
+- `truncate` takes an `ellipsis`, charged against the budget in that namespace's
+  own unit, and added only when something was actually cut. A marker that cannot
+  fit is dropped rather than allowed to exceed the budget.
+- Subpath exports — `@sjpnz/graphemic/graphemes`, `/code-points`, `/code-units`,
+  `/utf8` — holding the same functions under the same names, for callers who
+  want plain functions or a namespace that tree-shakes under every bundler.
+- `SegmenterUnavailableError`, thrown on first use on a runtime without
+  `Intl.Segmenter`. There is no polyfill and no fallback to code points, which
+  would split the emoji and combining marks this package exists to protect.
+- `VERSION`, and the `Boundary`, `BoundaryOptions` and `TruncateOptions` types.
+
+[unreleased]: https://github.com/sjp/graphemic/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/sjp/graphemic/releases/tag/v0.1.0

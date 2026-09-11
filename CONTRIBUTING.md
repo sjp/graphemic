@@ -176,6 +176,52 @@ If you change something that could plausibly move them, re-record the affected
 tables and say which machine and Node version did it. A row that moves by a
 factor is a finding; a row that moves by a fifth is the room next door.
 
+## Releasing
+
+Releases are cut by hand; a pushed `v*` tag is the only thing that publishes.
+
+```sh
+# 1. Move the Unreleased section of CHANGELOG.md to x.y.z, dated today, and
+#    add the two link definitions at the foot of the file. Commit it.
+npm version x.y.z   # 2. bumps package.json, syncs VERSION, commits, tags
+git push --follow-tags
+```
+
+Step 2 is the whole ceremony. `npm version` runs the `version` script, which
+rewrites the `VERSION` constant in `src/index.ts` from package.json and stages
+it, so the constant, the manifest and the tag are one commit and cannot drift.
+`.github/scripts/check-version.mjs` checks all three agree — in CI on every
+commit, and again in the publish workflow against the tag it is running for,
+where a mismatch stops the release. npm versions are immutable, so that check
+exists because there is no fixing it afterwards.
+
+`.github/workflows/publish.yml` then re-runs everything CI runs against the
+tagged tree and publishes with `--provenance`. No npm token exists: publishing
+uses npm trusted publishing, which exchanges the workflow's OIDC identity for a
+short-lived credential and signs the attestation linking the tarball to this
+repository and commit. Nothing to store, nothing to leak, nothing to rotate.
+
+Before the first release of a package, once:
+
+1. Publish `0.1.0` from a logged-in local CLI (`npm publish --access public`).
+   Trusted publishing can only be configured on a package that already exists,
+   so this one tarball carries no provenance.
+2. On npmjs.com → the package → Settings → Trusted publishers, add this
+   repository and `publish.yml`.
+3. Every release after that goes through the workflow. Confirm the provenance
+   badge on the npm page of the first one that does.
+4. Optionally give the `npm` environment a required reviewer in the repository
+   settings, which holds a pushed tag until someone approves the publish.
+
+`npm publish --dry-run` prints the tarball without uploading it, and
+`.github/scripts/check-package.mjs` does the same with the assertions attached.
+
+Version numbers say what they usually say, with one local rule: while the
+package is `0.x` a breaking change bumps the minor, and `1.0.0` waits until the
+namespaces and option names have survived a real project. A string segmenting
+differently under a newer runtime is not a release — that is the runtime's
+Unicode version changing, not this library's behaviour.
+
 ## Scope
 
 The API is deliberately not symmetrical. `reverse`, `split`, `chunk`, `pad*`
