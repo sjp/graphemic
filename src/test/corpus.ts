@@ -212,6 +212,36 @@ export const corpus: readonly Fixture[] = [
   },
 ];
 
+/**
+ * Fixtures long enough to matter for cost rather than correctness.
+ *
+ * They are kept out of {@link corpus} deliberately: every namespace test and
+ * every generated-input property runs the whole corpus, and a ten-thousand
+ * character string in that list buys nothing a five character one does not
+ * already prove, while slowing down the runs that do find bugs. Use these where
+ * size itself is the point.
+ */
+export const longCorpus: readonly Fixture[] = [
+  {
+    name: 'ten thousand ASCII characters',
+    s: 'x'.repeat(10_000),
+    graphemes: 10_000,
+    codePoints: 10_000,
+    codeUnits: 10_000,
+    utf8: 10_000,
+  },
+  {
+    // two thousand skin-toned waving hands: 2 code points, 4 code units and
+    // 8 bytes apiece
+    name: 'two thousand skin-toned waves',
+    s: '\u{1F44B}\u{1F3FD}'.repeat(2_000),
+    graphemes: 2_000,
+    codePoints: 4_000,
+    codeUnits: 8_000,
+    utf8: 16_000,
+  },
+];
+
 /** The reference oracles the corpus counts were computed from. */
 export const oracles = {
   graphemes: (s: string): number =>

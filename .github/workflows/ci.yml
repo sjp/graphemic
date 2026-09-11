@@ -34,7 +34,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check
+      # Ten times the local number of generated cases per property: still a few
+      # seconds, and the extra runs are what turn a rare input into a failure
+      # here rather than in someone's application.
       - run: npm run test:coverage
+        env:
+          PROPERTY_RUNS: 5000
       - run: npm run build
       - run: npm run lint:package
 
