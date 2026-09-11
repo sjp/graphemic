@@ -63,6 +63,7 @@ const FIXTURES: readonly Fixture[] = [
   { name: 'ns-subpath-length', prints: '4' },
   { name: 'ns-length', prints: '4' },
   { name: 'sub-utf8-truncate', prints: '"hi "' },
+  { name: 'sub-columns-length', prints: '5' },
   {
     name: 'ns-everything',
     prints:
@@ -266,6 +267,39 @@ describe.each(BUNDLERS)('%s', (name) => {
     const { code } = bundle('codeunits-length', name);
     expect(code).not.toContain('Intl.Segmenter');
     expect(retainedNames(code)).toStrictEqual(['length']);
+  });
+});
+
+describe('the width tables', () => {
+  /**
+   * A run of the encoding long enough that it cannot occur by chance, taken
+   * from the head of each table. Matching the whole table would be brittle
+   * against a UCD bump for no extra assurance: if any of this is present, all
+   * of it is.
+   */
+  const MARKERS = ['tFAySvDzIGnIsB', 'goE/C6tEBNB+FD', 'hFACACBBACBBEB', '64IBtGDDACApQB'];
+
+  test('are in the bundle of the caller who asked for them', () => {
+    for (const name of BUNDLERS) {
+      const { code } = bundle('sub-columns-length', name);
+      for (const marker of MARKERS) {
+        expect(code, `${marker} missing from sub-columns-length under ${name}`).toContain(marker);
+      }
+    }
+  });
+
+  // The reason `columns` is not re-exported from the root entry point. Every
+  // other namespace is, and esbuild retains all of one that reaches it that
+  // way — so a re-export here would put several kilobytes of Unicode data in
+  // the bundle of everyone who imported `graphemes.length`.
+  test.each(BUNDLERS)('are in no bundle that did not, under %s', (name) => {
+    for (const fixture of FIXTURES) {
+      if (fixture.name === 'sub-columns-length') continue;
+      const { code } = bundle(fixture.name, name);
+      for (const marker of MARKERS) {
+        expect(code, `${marker} leaked into ${fixture.name} under ${name}`).not.toContain(marker);
+      }
+    }
   });
 });
 

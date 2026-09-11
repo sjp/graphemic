@@ -28,6 +28,24 @@ describe('public surface', () => {
     ]);
   });
 
+  it('does not expose columns, which is the subpath entry point only', async () => {
+    // Deliberate, and load-bearing: esbuild retains a whole namespace that
+    // reaches it through a re-export, so `export * as columns` here would hand
+    // several kilobytes of Unicode width tables to every caller who imported
+    // `graphemes`. The bundle suite asserts the consequence; this asserts the
+    // cause, which is the half a refactor can undo by accident.
+    expect(Object.keys(index)).not.toContain('columns');
+
+    const subpath = await import('./columns.js');
+    expect(Object.keys(subpath).toSorted()).toEqual([
+      'length',
+      'padEnd',
+      'padStart',
+      'slice',
+      'truncate',
+    ]);
+  });
+
   it('exposes graphemes as a module namespace, not an object literal', async () => {
     // A module namespace object is what makes `graphemes.length` tree-shakeable.
     // Its non-extensibility cannot be asserted here — Vitest emulates namespaces

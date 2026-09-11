@@ -12,6 +12,10 @@
  * than about constructor cost.
  */
 
+// The shipped width tables, so that the per-code-point baseline below is
+// compared on algorithm rather than on data.
+import { hasEmojiPresentation, isWide, isZeroWidth } from '../dist/internal/width/ranges.js';
+
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 /** Count graphemes by materialising every one of them. */
@@ -50,4 +54,37 @@ export function countCodePointsByIteration(s: string): number {
   let count = 0;
   for (const _ of s) count += 1;
   return count;
+}
+
+/**
+ * Terminal width the way a `wcwidth` package does it: per code point, with no
+ * segmentation at all.
+ *
+ * Given the same tables `columns` uses, so the comparison is about the shape of
+ * the algorithm rather than about whose Unicode data is better. It is here as a
+ * cost, not as a target: it sums the four-person family emoji to eight columns,
+ * and a skin-toned wave to two plus two. Being faster than this is not the
+ * claim; being right and still close to it is.
+ */
+export function widthByCodePoint(s: string): number {
+  let total = 0;
+  for (const character of s) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (isZeroWidth(codePoint)) continue;
+    total += isWide(codePoint) || hasEmojiPresentation(codePoint) ? 2 : 1;
+  }
+  return total;
+}
+
+/** Fit a column budget by measuring the whole string and then cutting it. */
+export function truncateByWidth(s: string, max: number): string {
+  let used = 0;
+  let result = '';
+  for (const { segment } of segmenter.segment(s)) {
+    const width = widthByCodePoint(segment);
+    if (used + width > max) break;
+    used += width;
+    result += segment;
+  }
+  return result;
 }

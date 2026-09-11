@@ -178,6 +178,41 @@ Two caveats worth knowing before drawing conclusions from a ratio:
 | a megabyte of ASCII | 3.52k         | 28.14k              | 32.30k        | 515               | 283.99 µs |
 | a megabyte of mixed | 500           | 10.14k              | 1.78k         | 501               | 2.0 ms    |
 
+### columns.length
+
+The alternative here is not a native method — `String.prototype` has no idea what
+a column is — but the per-code-point `wcwidth` loop a caller would otherwise
+reach for, given the same tables. It is not an equivalent: it sums a ZWJ family
+to eight columns where this returns two. `graphemes.length` is in the table for
+scale, since it is the same walk with a cheaper measure.
+
+| input               | `columns.length` | `per-code-point wcwidth` | `graphemes.length` | per call  |
+| ------------------- | ---------------- | ------------------------ | ------------------ | --------- |
+| short ASCII         | 8.56M            | 313.76k                  | 8.64M              | 117 ns    |
+| long ASCII          | 175.56k          | 931                      | 173.79k            | 5.70 µs   |
+| short emoji         | 322.30k          | 448.78k                  | 620.30k            | 3.10 µs   |
+| long mixed          | 573              | 744                      | 2.10k              | 1.75 ms   |
+| a megabyte of ASCII | 1.83k            | 6.4                      | 1.83k              | 545.20 µs |
+| a megabyte of mixed | 5.4              | 7.4                      | 19                 | 186.6 ms  |
+
+### columns.truncate to a terminal width
+
+| input               | `columns.truncate` | `width then slice` | per call |
+| ------------------- | ------------------ | ------------------ | -------- |
+| short ASCII         | 20.02M             | 143.86k            | 50 ns    |
+| long ASCII          | 3.53M              | 47.35k             | 284 ns   |
+| short emoji         | 20.69M             | 286.33k            | 48 ns    |
+| long mixed          | 54.48k             | 57.33k             | 18.35 µs |
+| a megabyte of ASCII | 3.33M              | 2.60k              | 300 ns   |
+| a megabyte of mixed | 958                | 590                | 1.0 ms   |
+
+### columns.padEnd to a column
+
+| input       | `columns.padEnd` | `graphemes.padEnd` | per call |
+| ----------- | ---------------- | ------------------ | -------- |
+| short ASCII | 3.57M            | 3.65M              | 280 ns   |
+| short emoji | 193.93k          | 327.27k            | 5.16 µs  |
+
 ## What the numbers say
 
 **The ASCII fast path is the difference between "usable in a request path" and
@@ -208,6 +243,21 @@ number without a `TextEncoder` and without assuming a runtime.
 49 ns on short ASCII against 2.2 µs for the two-pass version by hand, because
 the marker is charged against the budget arithmetically instead of by segmenting
 the string a second time.
+
+**Measuring in columns is the same walk as measuring in graphemes, plus a binary
+search per character.** On printable ASCII the two are indistinguishable, because
+both answer with `s.length` after one scan — 545 µs for a megabyte against 6.4
+ops/s for the per-code-point loop, which is 85,000 times slower because it has no
+fast path to take. Off it, the table lookups cost: a megabyte of mixed text is
+187 ms against 53 ms in graphemes, and the difference is four binary searches per
+character in the worst case. Nothing about that is free, and nothing about it is
+avoidable without giving up the answer being right.
+
+**The per-code-point loop wins on short emoji-heavy text, and is wrong there.**
+448.78k against 322.30k on the short emoji sample: it never segments, so it never
+pays for the segmenter, and it reports eight columns for a family of four. That
+row is the cost of the correctness, and it is the whole reason the namespace is
+on this package rather than in a `wcwidth` port.
 
 ### Where it still costs
 

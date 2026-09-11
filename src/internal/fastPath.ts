@@ -34,8 +34,19 @@ const SURROGATE = /[\uD800-\uDFFF]/;
 /** Any code unit outside ASCII — the only way a string can need more bytes than code units. */
 const NON_ASCII = /[\u0080-\uFFFF]/;
 
+/**
+ * Anything outside printable ASCII.
+ *
+ * {@link isAscii} is not sufficient for measuring width: it admits the C0
+ * controls, which are not one column each — they are none. Printable ASCII is
+ * the class where one code unit is one grapheme is one column.
+ */
+const NOT_PRINTABLE_ASCII = /[^\x20-\x7E]/;
+
 const MAX_ASCII = 0x7f;
 const CARRIAGE_RETURN = 0x0d;
+const SPACE = 0x20;
+const TILDE = 0x7e;
 
 /**
  * Claims the segmenter that a fast path is about to not use.
@@ -128,6 +139,24 @@ export function trivialTruncation(
   boundary: Boundary = 'grapheme',
 ): string | undefined {
   if (!isTrivialPrefix(s, max, boundary)) return undefined;
+  return truncateByCodeUnit(s, max, ellipsis, size);
+}
+
+/**
+ * The body both trivial truncations share: within a prefix whose units all
+ * coincide the budget is simply the number of code units to keep, so the whole
+ * operation is one `slice` — the boundary check included, since a cut between
+ * two such characters lands on every kind of boundary there is.
+ *
+ * The caller has already established that the prefix qualifies; nothing here
+ * re-checks it.
+ */
+function truncateByCodeUnit(
+  s: string,
+  max: number,
+  ellipsis: string | undefined,
+  size: Measure,
+): string {
   // Every unit of the prefix coincides, so all of `s` fits exactly when its code
   // units do — and then nothing is cut and no marker is wanted.
   if (s.length <= max) return s;
@@ -138,6 +167,68 @@ export function trivialTruncation(
   // string, as documented on every namespace's `truncate`.
   if (cost > max) return s.slice(0, max);
   return s.slice(0, max - cost) + ellipsis;
+}
+
+/**
+ * Whether every character of `s` is printable ASCII — `\x20` to `\x7E` — where
+ * one code unit is one grapheme is exactly one terminal column.
+ *
+ * The narrower sibling of {@link isTrivial}, and narrower for a reason: the C0
+ * controls are one code unit and one grapheme each but *no* columns, so the
+ * class that settles the other three units is wrong for this one. CR is
+ * excluded by being a control, which also keeps `\r\n` off this path.
+ *
+ * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter` —
+ *   see {@link claimSegmenter}.
+ */
+export function isPrintableAscii(s: string): boolean {
+  if (NOT_PRINTABLE_ASCII.test(s)) return false;
+  claimSegmenter('grapheme');
+  return true;
+}
+
+/**
+ * As {@link isPrintableAscii}, but asked only of the part a prefix operation can
+ * reach: the first `count` code units, and the one after them.
+ *
+ * The same O(count) rather than O(n) argument as {@link isTrivialPrefix}, and
+ * the same reason for looking one past the budget — no printable ASCII
+ * character attaches to its neighbour, so one more unit settles whether the cut
+ * is on a boundary.
+ *
+ * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter` —
+ *   see {@link claimSegmenter}.
+ */
+export function isPrintableAsciiPrefix(s: string, count: number): boolean {
+  const end = Math.min(count + 1, s.length);
+  for (let i = 0; i < end; i += 1) {
+    const unit = s.charCodeAt(i);
+    if (unit < SPACE || unit > TILDE) return false;
+  }
+  claimSegmenter('grapheme');
+  return true;
+}
+
+/**
+ * `truncate` for a string whose first `max` columns are printable ASCII, or
+ * `undefined` when the general path has to run.
+ *
+ * The column counterpart of {@link trivialTruncation}. `size` measures a whole
+ * string in columns, which is the one thing the prefix cannot work out for
+ * itself: the ellipsis need not be ASCII, and `'…'` is three UTF-8 bytes but a
+ * single column.
+ *
+ * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter` —
+ *   see {@link claimSegmenter}.
+ */
+export function printableAsciiTruncation(
+  s: string,
+  max: number,
+  ellipsis: string | undefined,
+  size: Measure,
+): string | undefined {
+  if (!isPrintableAsciiPrefix(s, max)) return undefined;
+  return truncateByCodeUnit(s, max, ellipsis, size);
 }
 
 /**

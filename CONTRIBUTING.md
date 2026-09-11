@@ -84,8 +84,9 @@ package.json is a promise every bundler takes on trust:
   its own function so that `slice` does not carry it.
 
 `test/bundle/` bundles the programs in `fixtures/` — the two import styles from
-the README, a namespace taken from a subpath, one named function, and the entire
-public surface as an upper bound — with esbuild and with Rollup, resolving
+the README, a namespace taken from a subpath, one named function, the one entry
+point with Unicode tables behind it, and the entire public surface as an upper
+bound — with esbuild and with Rollup, resolving
 `@sjpnz/graphemic` by name through the package's own `exports` map so that the
 map is part of what is being tested. Each bundle is then checked three ways:
 functions nobody asked for are gone, the size is within budget, and running it
@@ -105,10 +106,57 @@ grapheme functions under esbuild, and a test asserts that it does. That test is 
 canary rather than an endorsement: when esbuild learns to see through it, the
 assertion fails, the budget drops, and the README's warning about it can go.
 
+## The width tables
+
+`columns` is the only namespace with bulk data behind it, and the only one that
+is a subpath and nothing else. Both facts are one decision: esbuild retains a
+whole namespace that reaches it through a re-export, so `export * as columns`
+from `src/index.ts` would put several kilobytes of Unicode tables in the bundle
+of everyone who imported `graphemes.length`. `src/index.test.ts` asserts the
+root entry point does not export it, and the bundle suite asserts that no
+bundle without `@sjpnz/graphemic/columns` in it contains any of the table data.
+Do not re-export it, even for symmetry.
+
+The data flows one way:
+
+```text
+vendor/ucd/17.0.0/*.txt          committed, never fetched at build time
+  → scripts/generate-width-tables.mjs
+    → src/internal/width/tables.ts   committed, generated, do not edit
+      → src/internal/width/ranges.ts decodes lazily, searches by binary search
+        → src/internal/width/measure.ts  one grapheme → 0, 1 or 2 columns
+```
+
+Four properties are extracted — General_Category Mn/Me/Cf, East_Asian_Width
+W/F, East_Asian_Width A, and Emoji_Presentation — each as a run of code point
+ranges, delta-encoded into a string and decoded on first use into a
+`Uint32Array` of edges. The whole lot is about 4 KB of source and 1.6 KB
+gzipped in a bundle, with a per-file budget in
+`.github/scripts/check-package.mjs` that fires if it ever stops being that.
+
+To move to a newer UCD:
+
+1. Download `EastAsianWidth.txt`, `extracted/DerivedGeneralCategory.txt` and
+   `emoji/emoji-data.txt` into `vendor/ucd/<version>/`.
+2. Change `UCD_VERSION` in `scripts/generate-width-tables.mjs`.
+3. Run `npm run generate:tables` and commit the result.
+4. Run `npm test`. `src/internal/width/tables.test.ts` regenerates the file and
+   asserts no diff, so a stale table fails; the corpus fixtures carry a
+   `columns` count each, so a width that changed fails by name.
+
+The tables are committed rather than built so that a table change arrives in a
+diff a reviewer reads, and so that a clean checkout needs no code generation to
+test or publish.
+
+The pinned version and the runtime's will drift — `Intl.Segmenter` follows
+ICU's, not this — and that is documented rather than chased. A code point the
+tables have never heard of measures 1, which is what a terminal whose font has
+never heard of it will draw anyway.
+
 ## Adding a corpus fixture
 
 `src/test/corpus.ts` is the shared list of strings that break naive code. Every
-fixture carries its size in all four units, and those counts are **committed
+fixture carries its size in all five units, and those counts are **committed
 literals** — computed once with the oracles at the bottom of that file and
 written down, so that a future ICU or runtime change fails a test instead of
 being silently re-derived.
@@ -128,7 +176,12 @@ To add one:
    are unsure, compute them once with `oracles` in a scratch script and paste
    the results — but do not make the test compute them, which is the whole
    point.
-4. Run `npm test`. `src/test/corpus.test.ts` checks the claimed counts against
+4. Fill in `columns` by hand too, and read it twice. It is the one count with
+   no oracle behind it — there is no `Intl` anything that answers "how wide is
+   this?", which is why the namespace exists — so the only thing holding it to
+   anything is you and the rules in `src/internal/width/measure.ts`. Check it
+   against a real terminal if it is not obvious.
+5. Run `npm test`. `src/test/corpus.test.ts` checks the claimed counts against
    the oracles, so a typo fails immediately.
 
 A fixture earns its place by breaking something a simpler string does not: a

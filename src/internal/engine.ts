@@ -45,8 +45,12 @@ export function measureAll(s: string, measure: Measure, boundary: Boundary): num
  * it before calling.
  */
 export function prefixEnd(s: string, max: number, measure: Measure, boundary: Boundary): number {
-  if (max <= 0) return 0;
-
+  // There is deliberately no `max <= 0` shortcut here. It would be right for
+  // every unit in which a segment is worth at least one — which is four of the
+  // five — and wrong for columns, where a combining mark or a control measures
+  // zero and so still fits a budget of nothing. The loop below answers a
+  // non-positive budget on its first segment anyway, so the shortcut bought one
+  // segmentation rather than an algorithm.
   let used = 0;
   let end = 0;
   for (const { segment, index } of units(s, boundary)) {

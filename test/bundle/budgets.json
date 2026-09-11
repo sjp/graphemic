@@ -4,5 +4,6 @@
   "ns-subpath-length": { "esbuild": 700, "rollup": 650 },
   "ns-length": { "esbuild": 2300, "rollup": 650 },
   "sub-utf8-truncate": { "esbuild": 1200, "rollup": 1050 },
+  "sub-columns-length": { "esbuild": 2500, "rollup": 2450 },
   "ns-everything": { "esbuild": 3000, "rollup": 2600 }
 }

@@ -28,6 +28,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as codePoints from './codePoints.js';
 import * as codeUnits from './codeUnits.js';
+import * as columns from './columns.js';
 import * as graphemes from './graphemes.js';
 import * as index from './index.js';
 import * as utf8 from './utf8.js';
@@ -42,6 +43,7 @@ const ENTRY_POINTS: Readonly<Record<string, Readonly<Record<string, unknown>>>> 
   '@sjpnz/graphemic/code-points': codePoints,
   '@sjpnz/graphemic/code-units': codeUnits,
   '@sjpnz/graphemic/utf8': utf8,
+  '@sjpnz/graphemic/columns': columns,
 };
 
 /** In scope for every sample, so short examples need no preamble. */
@@ -50,6 +52,7 @@ const AMBIENT: Readonly<Record<string, unknown>> = {
   codePoints,
   codeUnits,
   utf8,
+  columns,
   SegmenterUnavailableError: index.SegmenterUnavailableError,
   VERSION: index.VERSION,
 };
@@ -223,6 +226,7 @@ describe('README coverage', () => {
     codePoints,
     codeUnits,
     utf8,
+    columns,
   } as const;
 
   for (const [namespace, module] of Object.entries(namespaces)) {
@@ -246,5 +250,12 @@ describe('README coverage', () => {
     expect(readme).toContain("{ boundary: 'codePoint' }");
     expect(readme).toContain("from '@sjpnz/graphemic'");
     expect(readme).toContain("from '@sjpnz/graphemic/graphemes'");
+  });
+
+  it('documents that columns is reachable only from its own subpath', () => {
+    expect(readme).toContain("from '@sjpnz/graphemic/columns'");
+    // If this ever appears, the root entry point grew a namespace it must not
+    // have, or the README is telling people it did.
+    expect(readme).not.toContain("columns } from '@sjpnz/graphemic'");
   });
 });

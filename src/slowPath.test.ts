@@ -18,9 +18,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import * as codePoints from './codePoints.js';
 import * as codeUnits from './codeUnits.js';
+import * as columns from './columns.js';
 import * as graphemes from './graphemes.js';
 import { corpus } from './test/corpus.js';
-import type { BoundaryOptions } from './types.js';
+import type { BoundaryOptions, ColumnsOptions } from './types.js';
 import * as utf8 from './utf8.js';
 
 const forced = vi.hoisted(() => ({ slow: false }));
@@ -38,6 +39,12 @@ vi.mock('./internal/fastPath.js', async (importOriginal) => {
       forced.slow ? false : actual.isAscii(...args),
     isSurrogateFree: (...args: Parameters<typeof actual.isSurrogateFree>) =>
       forced.slow ? false : actual.isSurrogateFree(...args),
+    isPrintableAscii: (...args: Parameters<typeof actual.isPrintableAscii>) =>
+      forced.slow ? false : actual.isPrintableAscii(...args),
+    isPrintableAsciiPrefix: (...args: Parameters<typeof actual.isPrintableAsciiPrefix>) =>
+      forced.slow ? false : actual.isPrintableAsciiPrefix(...args),
+    printableAsciiTruncation: (...args: Parameters<typeof actual.printableAsciiTruncation>) =>
+      forced.slow ? undefined : actual.printableAsciiTruncation(...args),
   } satisfies typeof actual;
 });
 
@@ -47,6 +54,7 @@ const runs = { numRuns: Number(process.env['PROPERTY_RUNS'] ?? DEFAULT_RUNS) };
 
 const ELLIPSIS = '\u2026';
 const CODE_POINT = { boundary: 'codePoint' } as const satisfies BoundaryOptions;
+const WIDE_AMBIGUOUS = { ambiguous: 2 } as const satisfies ColumnsOptions;
 
 /**
  * Every operation the package exposes, keyed by how it was called.
@@ -119,6 +127,22 @@ function everyOperation(s: string): Record<string, unknown> {
     'utf8.truncate(half)': utf8.truncate(s, half),
     'utf8.truncate(half, ellipsis)': utf8.truncate(s, half, withEllipsis),
     'utf8.truncate(half, ellipsis) by code point': utf8.truncate(s, half, byCodePoint),
+
+    // `columns` has its own, narrower predicate — printable ASCII, where the
+    // C0 controls the others admit are zero columns rather than one — so it
+    // needs the same two-path comparison as much as any of them.
+    'columns.length': columns.length(s),
+    'columns.length ambiguous wide': columns.length(s, WIDE_AMBIGUOUS),
+    'columns.slice(1, half)': columns.slice(s, 1, half),
+    'columns.slice(-2)': columns.slice(s, -2),
+    'columns.truncate(half)': columns.truncate(s, half),
+    'columns.truncate(half, ellipsis)': columns.truncate(s, half, withEllipsis),
+    'columns.truncate(0, ellipsis)': columns.truncate(s, 0, withEllipsis),
+    'columns.padStart(dot)': columns.padStart(s, wider, '.'),
+    'columns.padStart(default)': columns.padStart(s, wider),
+    'columns.padEnd(dot)': columns.padEnd(s, wider, '.'),
+    'columns.padEnd(two)': columns.padEnd(s, wider, 'xy'),
+    'columns.padEnd(short)': columns.padEnd(s, 1, '.'),
   };
 }
 

@@ -52,6 +52,10 @@
       "types": "./dist/utf8.d.ts",
       "default": "./dist/utf8.js"
     },
+    "./columns": {
+      "types": "./dist/columns.d.ts",
+      "default": "./dist/columns.js"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -61,6 +65,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
+    "generate:tables": "node scripts/generate-width-tables.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:bench": "tsc -p tsconfig.bench.json",
     "typecheck:bundle": "tsc -p tsconfig.bundle.json",

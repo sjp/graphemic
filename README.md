@@ -6,10 +6,10 @@
 Grapheme-safe string operations: length, slice, truncate, split, pad and search
 that never break a user-visible character.
 
-Every operation names its unit — `graphemes`, `codePoints`, `codeUnits` or
-`utf8` — so the question "which one did you mean?" is answered at the call site
-instead of being inherited from whatever `.length` happens to count. Whichever
-unit you measure in, the cut lands between whole characters.
+Every operation names its unit — `graphemes`, `codePoints`, `codeUnits`, `utf8`
+or `columns` — so the question "which one did you mean?" is answered at the call
+site instead of being inherited from whatever `.length` happens to count.
+Whichever unit you measure in, the cut lands between whole characters.
 
 ```ts
 import { codeUnits, graphemes } from '@sjpnz/graphemic';
@@ -58,8 +58,9 @@ Both are backed by the same functions — there is one implementation of each �
 and the subpath style tree-shakes under every bundler: a caller who only
 measures strings ships neither the slicing machinery nor the search matcher,
 which is around 0.6 KB gzipped against the 2.6 KB the whole library costs. The
-entry points are `@sjpnz/graphemic/graphemes`, `/code-points`, `/code-units`
-and `/utf8`.
+entry points are `@sjpnz/graphemic/graphemes`, `/code-points`, `/code-units`,
+`/utf8` and `/columns`. The last of those is a subpath **and nothing else** —
+see [`columns`](#columns) for why.
 
 The root entry point shakes too under Rollup, rolldown and webpack, which
 rewrite `graphemes.length` into a reference to the function itself. **esbuild is
@@ -92,8 +93,11 @@ to do any of that.
 | UTF-16 code units — `nvarchar(N)` in SQL Server, a Java or C# `String` across an interface, most JS APIs | `codeUnits`  | `codeUnits.truncate(title, 100)`                  |
 | UTF-8 bytes — `varchar(N)` in MySQL/Postgres/SQLite, HTTP headers, filenames, byte-capped payloads       | `utf8`       | `utf8.truncate(name, 255)`                        |
 | Unicode code points — character counts on social platforms, `char_length()` in Postgres                  | `codePoints` | `codePoints.length(post) <= 280`                  |
+| Terminal display columns — tables, boxes, progress bars, anything drawn in a monospace grid              | `columns`    | `columns.padEnd(name, 20)`                        |
 
-If nobody imposed a limit on you, the unit you want is `graphemes`.
+If nobody imposed a limit on you, the unit you want is `graphemes`. If you are
+drawing into a terminal, it is `columns`, which lives behind its own entry
+point.
 
 One character, four answers — the skin-toned waving hand `👋🏽`:
 
@@ -107,11 +111,12 @@ UTF-8 bytes   F0 9F 91 8B F0 9F 8F BD      utf8.length       → 8
 Nothing about that is exotic. It is the ordinary shape of text once it leaves
 ASCII:
 
-| String                                              | `.length` says | graphemes | code points | code units | UTF-8 bytes |
-| --------------------------------------------------- | -------------- | --------- | ----------- | ---------- | ----------- |
-| `'u\u0308'` — a `u` with a combining diaeresis, `ü` | 2              | 1         | 2           | 2          | 3           |
-| `'👨\u200D🍼'` — a man feeding a baby               | 5              | 1         | 3           | 5          | 11          |
-| `'🇦🇺'` — the flag of Australia                      | 4              | 1         | 2           | 4          | 8           |
+| String                                              | `.length` says | graphemes | code points | code units | UTF-8 bytes | columns |
+| --------------------------------------------------- | -------------- | --------- | ----------- | ---------- | ----------- | ------- |
+| `'u\u0308'` — a `u` with a combining diaeresis, `ü` | 2              | 1         | 2           | 2          | 3           | 1       |
+| `'👨\u200D🍼'` — a man feeding a baby               | 5              | 1         | 3           | 5          | 11          | 2       |
+| `'🇦🇺'` — the flag of Australia                      | 4              | 1         | 2           | 4          | 8           | 2       |
+| `'東京'` — Tokyo                                    | 2              | 2         | 2           | 2          | 6           | 4       |
 
 ```ts
 graphemes.length('u\u0308'); // 1
@@ -252,11 +257,104 @@ utf8.slice('a👋b', 0, 5); // 'a👋'
 utf8.truncate('hi 👋🏽', 7); // 'hi ' — the wave is four bytes and its modifier four more
 ```
 
+### `columns`
+
+<a id="columns"></a>
+
+For anything drawn into a terminal. Imported from `@sjpnz/graphemic/columns`
+and from nowhere else — it is **not** re-exported from the root entry point.
+
+```ts
+import * as columns from '@sjpnz/graphemic/columns';
+
+columns.length('東京'); // 4 — two characters, four columns
+```
+
+| Signature                                    |                                                          |
+| -------------------------------------------- | -------------------------------------------------------- |
+| `length(s, options?)`                        | How many terminal columns the string occupies            |
+| `slice(s, start?, end?, options?)`           | `String#slice` with column offsets                       |
+| `truncate(s, max, options?)`                 | At most `max` columns, optionally with an `ellipsis`     |
+| `padStart(s, targetLength, fill?, options?)` | Pad to a width counted in columns, never overshooting it |
+| `padEnd(s, targetLength, fill?, options?)`   | The same, on the other end                               |
+
+```ts
+columns.length('hi 👋🏽'); // 5 — three narrow characters and one wide one
+columns.slice('東京都', 0, 4); // '東京'
+columns.truncate('東京都', 4, { ellipsis: '…' }); // '東…'
+columns.padStart('42', 6); // '    42'
+columns.padEnd('ab', 7, '東'); // 'ab東東' — six columns; a third 東 would be eight
+```
+
+`padEnd` is the reason the namespace exists. Every other unit lines a column of
+ASCII names up and wrecks it the moment one of them is `東京`:
+
+```ts
+graphemes.length(graphemes.padEnd('東京', 8)); // 8 — eight characters
+columns.length(graphemes.padEnd('東京', 8)); // 10 — and ten columns on screen
+columns.length(columns.padEnd('東京', 8)); // 8
+```
+
+A grapheme is two columns if it is drawn as an emoji or its base is East Asian
+wide, zero if it draws nothing, and one otherwise. Width is a property of the
+**whole character**, which is why this belongs on a grapheme-segmenting library
+rather than in another `wcwidth` package: a per-code-point implementation sums
+the four-person family emoji to eight columns, and every terminal that can draw
+it draws two.
+
+```ts
+columns.length('👨\u200D👩\u200D👧\u200D👦'); // 2 — one glyph, however many code points
+columns.length('e\u0301'); // 1 — the acute is drawn on the e, not beside it
+```
+
+`{ ambiguous: 2 }` counts East_Asian_Width **A** characters — box drawing,
+accented Latin, Greek, Cyrillic, much punctuation — as two columns instead of
+one. One is the default of essentially every terminal; two is what a CJK locale
+setup draws them in. Pass the same value to every call that measures the same
+table, or the columns drift.
+
+```ts
+columns.length('┌─┐'); // 3
+columns.length('┌─┐', { ambiguous: 2 }); // 6
+```
+
+There is no `boundary` option, unlike every other namespace. Width is a property
+of a rendered character, and a code-point cut changes the width of what it
+leaves behind — drop a trailing `U+FE0F` and a two-column glyph becomes a
+one-column one — so a code-point cut cannot honour a column budget even in
+principle. There is no `iterate`, `toArray` or `at` either.
+
+**This is an estimate, not a guarantee.** It is the common convention —
+`wcwidth` plus emoji presentation — and no more than that. Terminals disagree
+with each other about ambiguous-width characters, about ZWJ sequences (plenty
+draw the parts), and about any emoji their font lacks. The only exact answer is
+to write the text and ask the terminal where the cursor ended up, which is out
+of scope for a string library.
+
+Two further limits worth knowing:
+
+- **A tab is zero columns**, as are the C0 and C1 controls. There is no width a
+  tab could honestly be given — it depends on the cursor position, which this
+  library cannot see. Expand tabs before measuring.
+- **Unicode versions drift.** `Intl.Segmenter` follows the runtime's; the width
+  tables follow a pinned one (currently 17.0.0). A code point the tables have
+  never heard of measures 1, which is also what a terminal whose font has never
+  heard of it will draw.
+
+Why the subpath and not the root entry point: the width tables are the only bulk
+data in the package, around 1.6 KB gzipped, and esbuild retains a whole
+namespace that reaches it through a re-export. `export * as columns` from the
+root would hand those tables to every esbuild user who imported `graphemes`.
+Keeping it behind its own door is also honest about the namespace being a
+different kind of thing — the other four are exact, where a byte count is a fact
+about the encoding; a column count is an estimate about a font in a terminal.
+
 ### Also exported
 
 `SegmenterUnavailableError`, thrown on first use when the runtime has no
 `Intl.Segmenter`; `VERSION`; and the types `Boundary`, `BoundaryOptions` and
-`TruncateOptions`.
+`TruncateOptions`. `@sjpnz/graphemic/columns` additionally exports
+`AmbiguousWidth`, `ColumnsOptions` and `ColumnsTruncateOptions`.
 
 ```ts
 import { SegmenterUnavailableError, VERSION } from '@sjpnz/graphemic';
@@ -392,7 +490,9 @@ Full numbers, with the machine that produced them, are in
 return has one character per code unit, so every native offset is already a
 boundary and the native method is used directly after a single scan. Measuring
 a megabyte of ASCII in graphemes is 540 µs; segmenting the same megabyte is
-79 ms.
+79 ms. `columns` uses a narrower class for the same trick — printable ASCII,
+`\x20`–`\x7E` — because the C0 controls are one code unit each and no columns at
+all.
 
 **Segmentation stops at the budget.** Truncating that megabyte to ten
 characters is 132 ns, because the walk ends one code unit past the tenth and
@@ -417,6 +517,13 @@ created lazily and cached, and there is no locale parameter to get wrong.
 
 **…a polyfill?** See above: the failure mode of a fallback is silent corruption,
 which is worse than an error naming the runtimes that work.
+
+**…a `wcwidth` package instead of `columns`?** Those measure one code point at a
+time, which is the wrong granularity: a four-person family emoji is seven code
+points and one glyph, and summing its parts gives eight columns where a terminal
+draws two. Getting that right needs the segmentation this package already does,
+so the width table belongs next to it rather than in a package that cannot see
+the boundaries.
 
 **…`codePoints.reverse`, or search in `utf8`?** Reversing or separating code
 points reorders combining marks and tears ZWJ sequences apart by construction,
