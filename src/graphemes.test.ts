@@ -325,6 +325,18 @@ describe('split', () => {
   });
 
   it.each([
+    ['a limit of two', `${WAVE}a,b,c`, ',', 2, [`${WAVE}a`, 'b']],
+    ['a limit of zero', `${WAVE}a,b,c`, ',', 0, []],
+    ['a limit past the end', `${WAVE}a,b,c`, ',', 10, [`${WAVE}a`, 'b', 'c']],
+    ['a limit on the empty separator', `${WAVE}ab`, '', 2, [WAVE, 'a']],
+  ] as const)(
+    'honours %s on input that has to be segmented',
+    (_label, input, separator, limit, expected) => {
+      expect(split(input, separator, limit)).toEqual(expected);
+    },
+  );
+
+  it.each([
     ['a limit of undefined', undefined],
     ['a negative limit', -1],
     ['a fractional limit', 1.9],

@@ -18,16 +18,19 @@
  * Every function imports only the internals it needs and the module has no
  * top-level side effects, so a caller who only measures strings does not ship
  * the slicing machinery.
+ *
+ * Counting and indexing take the shortcut a string without surrogates allows,
+ * since then a code point is a code unit; cutting takes it only for ASCII, where
+ * a native offset is also a grapheme boundary. Either way the answer is the one
+ * the general path gives.
  */
 
-import { measureAll, sliceRange } from './internal/engine.js';
+import { sliceRange } from './internal/engine.js';
+import { isSurrogateFree, isTrivial, trivialTruncation } from './internal/fastPath.js';
 import { measureCodePoints } from './internal/measure.js';
 import { truncateTo } from './internal/truncate.js';
 import { requireNonNegativeInteger, toIntegerOrInfinity } from './internal/validate.js';
 import type { BoundaryOptions, TruncateOptions } from './types.js';
-
-/** Any surrogate at all — the only way a string can hold fewer code points than code units. */
-const SURROGATE = /[\uD800-\uDFFF]/;
 
 /**
  * The number of code points in `s`.
@@ -41,8 +44,10 @@ const SURROGATE = /[\uD800-\uDFFF]/;
  */
 export function length(s: string): number {
   // Without a surrogate anywhere, every code unit is its own code point.
-  if (!SURROGATE.test(s)) return s.length;
-  return measureAll(s, measureCodePoints, 'codePoint');
+  if (isSurrogateFree(s)) return s.length;
+  // Counting needs no boundaries, so this is one `charCodeAt` scan rather than an
+  // iteration that allocates a one-code-point string per character.
+  return measureCodePoints(s);
 }
 
 /**
@@ -72,6 +77,7 @@ export function iterate(s: string): IterableIterator<string> {
  * toArray(''); // []
  */
 export function toArray(s: string): string[] {
+  if (isSurrogateFree(s)) return s.split('');
   return [...s];
 }
 
@@ -90,6 +96,10 @@ export function toArray(s: string): string[] {
  * at('hi', 5); // undefined
  */
 export function at(s: string, index: number): string | undefined {
+  // With no surrogate anywhere, code-point indices are code-unit indices, and
+  // `String.prototype.at` coerces its index by the same algorithm.
+  if (isSurrogateFree(s)) return s.at(index);
+
   const integer = toIntegerOrInfinity(index);
   // Only a negative index needs the total, and it needs it up front — hence the
   // second pass. `toArray` is the better tool if you are doing this in a loop.
@@ -124,7 +134,10 @@ export function at(s: string, index: number): string | undefined {
  *   and the default grapheme boundary is used.
  */
 export function slice(s: string, start?: number, end?: number, options?: BoundaryOptions): string {
-  const [from, to] = sliceRange(s, start, end, measureCodePoints, options?.boundary ?? 'grapheme');
+  const boundary = options?.boundary ?? 'grapheme';
+  if (isTrivial(s, boundary)) return s.slice(start, end);
+
+  const [from, to] = sliceRange(s, start, end, measureCodePoints, boundary);
   return s.slice(from, to);
 }
 
@@ -158,5 +171,9 @@ export function truncate(s: string, max: number, options?: TruncateOptions): str
   // "it already fits" case without walking anything.
   if (s.length <= max) return s;
 
-  return truncateTo(s, max, measureCodePoints, options?.boundary ?? 'grapheme', options?.ellipsis);
+  const boundary = options?.boundary ?? 'grapheme';
+  const trivial = trivialTruncation(s, max, options?.ellipsis, measureCodePoints, boundary);
+  if (trivial !== undefined) return trivial;
+
+  return truncateTo(s, max, measureCodePoints, boundary, options?.ellipsis);
 }

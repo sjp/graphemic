@@ -11,9 +11,17 @@
  * Every function imports only the internals it needs and the module has no
  * top-level side effects, so a caller who only measures strings does not ship
  * `reverse` or the slicing machinery.
+ *
+ * Input whose units all coincide — ASCII with no carriage return — is answered by
+ * the native `String.prototype` method rather than by the segmenter, which is one
+ * scan and no allocation. The two agree by construction: in such a string one
+ * grapheme is one code unit, so every native offset is a boundary. A runtime with
+ * no `Intl.Segmenter` still fails on first use either way, because the fast path
+ * claims the segmenter it is skipping.
  */
 
 import { measureAll, sliceRange } from './internal/engine.js';
+import { isTrivial, trivialTruncation } from './internal/fastPath.js';
 import { measureGraphemes } from './internal/measure.js';
 import { findMatches } from './internal/search.js';
 import { graphemesOf, segments } from './internal/segmenter.js';
@@ -40,6 +48,7 @@ export function length(s: string): number {
   // Zero or one code units cannot be more than one grapheme, and there is
   // nothing for a neighbour to join to, so the segmenter has nothing to decide.
   if (s.length <= 1) return s.length;
+  if (isTrivial(s)) return s.length;
   return measureAll(s, measureGraphemes, 'grapheme');
 }
 
@@ -57,6 +66,10 @@ export function length(s: string): number {
  * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter`.
  */
 export function iterate(s: string): IterableIterator<string> {
+  // A string iterator yields code points, which for a trivial string are its
+  // graphemes — and it is the runtime's own loop rather than a generator
+  // wrapping a segmenter.
+  if (isTrivial(s)) return s[Symbol.iterator]();
   return graphemesOf(s);
 }
 
@@ -74,6 +87,7 @@ export function iterate(s: string): IterableIterator<string> {
  * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter`.
  */
 export function toArray(s: string): string[] {
+  if (isTrivial(s)) return s.split('');
   return [...graphemesOf(s)];
 }
 
@@ -92,6 +106,10 @@ export function toArray(s: string): string[] {
  * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter`.
  */
 export function at(s: string, index: number): string | undefined {
+  // `String.prototype.at` coerces its index by the same algorithm, so a trivial
+  // string can be handed straight to it, negative indices included.
+  if (isTrivial(s)) return s.at(index);
+
   const integer = toIntegerOrInfinity(index);
   // Only a negative index needs the total, and it needs it up front — hence the
   // second pass. `toArray` is the better tool if you are doing this in a loop.
@@ -120,6 +138,8 @@ export function at(s: string, index: number): string | undefined {
  * @throws {SegmenterUnavailableError} If the runtime has no `Intl.Segmenter`.
  */
 export function slice(s: string, start?: number, end?: number): string {
+  if (isTrivial(s)) return s.slice(start, end);
+
   const [from, to] = sliceRange(s, start, end, measureGraphemes, 'grapheme');
   return s.slice(from, to);
 }
@@ -154,6 +174,9 @@ export function truncate(
   // A string never has more graphemes than code units, so this settles the
   // "it already fits" case without segmenting at all.
   if (s.length <= max) return s;
+
+  const trivial = trivialTruncation(s, max, options?.ellipsis, length);
+  if (trivial !== undefined) return trivial;
 
   return truncateTo(s, max, measureGraphemes, 'grapheme', options?.ellipsis);
 }
@@ -191,6 +214,12 @@ const UNLIMITED = 2 ** 32 - 1;
  */
 export function split(s: string, separator: string, limit?: number): string[] {
   requireString('separator', separator);
+  // Native `split` coerces `limit` by the same algorithm, and every boundary of a
+  // trivial string is a grapheme boundary — so a separator it finds is one this
+  // would have found, and a separator that cannot occur in ASCII is found by
+  // neither.
+  if (isTrivial(s)) return s.split(separator, limit);
+
   const max = limit === undefined ? UNLIMITED : toUint32(limit);
   if (max === 0) return [];
   // Every grapheme is its own piece, and the empty string has none — the one
@@ -227,6 +256,13 @@ export function split(s: string, separator: string, limit?: number): string[] {
 export function chunk(s: string, size: number): string[] {
   requirePositiveInteger('size', size);
 
+  if (isTrivial(s)) {
+    // One grapheme per code unit, so the pieces are fixed-width slices.
+    const slices: string[] = [];
+    for (let from = 0; from < s.length; from += size) slices.push(s.slice(from, from + size));
+    return slices;
+  }
+
   const pieces: string[] = [];
   let from = 0;
   let held = 0;
@@ -261,6 +297,18 @@ export function chunk(s: string, size: number): string[] {
  */
 export function reverse(s: string): string {
   return toArray(s).toReversed().join('');
+}
+
+/**
+ * Whether native padding is safe here: both halves have to be trivial.
+ *
+ * A trivial string padded with a non-trivial fill is precisely the case native
+ * padding gets wrong, by cutting the fill mid character, so the fill is checked
+ * too. Two ASCII pieces cannot join across the seam either, which is the other
+ * thing this rules out.
+ */
+function padsTrivially(s: string, fill: string): boolean {
+  return isTrivial(s) && isTrivial(fill);
 }
 
 /**
@@ -313,6 +361,8 @@ function padding(need: number, fill: string): string {
  */
 export function padStart(s: string, targetLength: number, fill = ' '): string {
   requireString('fill', fill);
+  if (padsTrivially(s, fill)) return s.padStart(targetLength, fill);
+
   const need = toIntegerOrInfinity(targetLength) - length(s);
   if (need <= 0 || fill === '') return s;
   return padding(need, fill) + s;
@@ -342,6 +392,8 @@ export function padStart(s: string, targetLength: number, fill = ' '): string {
  */
 export function padEnd(s: string, targetLength: number, fill = ' '): string {
   requireString('fill', fill);
+  if (padsTrivially(s, fill)) return s.padEnd(targetLength, fill);
+
   const need = toIntegerOrInfinity(targetLength) - length(s);
   if (need <= 0 || fill === '') return s;
   return s + padding(need, fill);
@@ -379,6 +431,11 @@ export function padEnd(s: string, targetLength: number, fill = ' '): string {
  */
 export function indexOf(s: string, search: string, fromIndex?: number): number {
   requireString('search', search);
+  // Grapheme indices are code-unit indices in a trivial string, and native
+  // `indexOf` clamps `fromIndex` the same way — including for the empty needle,
+  // which it also reports at every position.
+  if (isTrivial(s)) return s.indexOf(search, fromIndex);
+
   const from = Math.max(toIntegerOrInfinity(fromIndex), 0);
   // The empty string sits in every gap, including the one past the end, so the
   // answer is the starting point clamped to the length — as `String#indexOf`.

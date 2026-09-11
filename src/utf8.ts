@@ -24,16 +24,18 @@
  * Every function imports only the internals it needs and the module has no
  * top-level side effects, so a caller who only measures strings does not ship
  * the slicing machinery.
+ *
+ * Counting is one scan of the code units, and for ASCII not even that — a byte
+ * per code unit is the answer. Cutting delegates to the native method on the same
+ * ASCII condition, where a byte offset is a code-unit offset and a boundary.
  */
 
-import { measureAll, sliceRange } from './internal/engine.js';
+import { sliceRange } from './internal/engine.js';
+import { isAscii, isTrivial, trivialTruncation } from './internal/fastPath.js';
 import { measureUtf8 } from './internal/measure.js';
 import { truncateTo } from './internal/truncate.js';
 import { requireNonNegativeInteger } from './internal/validate.js';
 import type { BoundaryOptions, TruncateOptions } from './types.js';
-
-/** Any code unit outside ASCII — the only way a string can need more bytes than code units. */
-const NON_ASCII = /[\u0080-\uFFFF]/;
 
 /** The largest number of UTF-8 bytes a single code unit can be worth. */
 const MAX_BYTES_PER_CODE_UNIT = 3;
@@ -58,10 +60,11 @@ const MAX_BYTES_PER_CODE_UNIT = 3;
  */
 export function length(s: string): number {
   // Every ASCII code unit is exactly one byte.
-  if (!NON_ASCII.test(s)) return s.length;
-  // Bytes per code point are the same however the string is segmented, so take
-  // the cheaper walk — no segmenter, no boundary rules.
-  return measureAll(s, measureUtf8, 'codePoint');
+  if (isAscii(s)) return s.length;
+  // Bytes per code point are the same however the string is segmented, so there
+  // is nothing to segment: one `charCodeAt` scan of the whole string, no
+  // boundary rules, and no one-code-point string allocated per character.
+  return measureUtf8(s);
 }
 
 /**
@@ -86,7 +89,12 @@ export function length(s: string): number {
  *   and the default grapheme boundary is used.
  */
 export function slice(s: string, start?: number, end?: number, options?: BoundaryOptions): string {
-  const [from, to] = sliceRange(s, start, end, measureUtf8, options?.boundary ?? 'grapheme');
+  const boundary = options?.boundary ?? 'grapheme';
+  // A trivial string is one byte per code unit, so byte offsets are the native
+  // ones and every one of them is a boundary.
+  if (isTrivial(s, boundary)) return s.slice(start, end);
+
+  const [from, to] = sliceRange(s, start, end, measureUtf8, boundary);
   return s.slice(from, to);
 }
 
@@ -124,5 +132,9 @@ export function truncate(s: string, max: number, options?: TruncateOptions): str
   // "comfortably under budget" case without walking anything. Loose, but free.
   if (s.length * MAX_BYTES_PER_CODE_UNIT <= max) return s;
 
-  return truncateTo(s, max, measureUtf8, options?.boundary ?? 'grapheme', options?.ellipsis);
+  const boundary = options?.boundary ?? 'grapheme';
+  const trivial = trivialTruncation(s, max, options?.ellipsis, measureUtf8, boundary);
+  if (trivial !== undefined) return trivial;
+
+  return truncateTo(s, max, measureUtf8, boundary, options?.ellipsis);
 }

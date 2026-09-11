@@ -41,6 +41,10 @@ jobs:
         env:
           PROPERTY_RUNS: 5000
       - run: npm run build
+      # The benchmarks are never run here — they are far too noisy to gate a merge
+      # on, and their numbers are recorded by hand in bench/RESULTS.md — but they
+      # are compiled against the build they measure, so they cannot rot unnoticed.
+      - run: npm run typecheck:bench
       - run: npm run lint:package
 
   # Guard the two promises that are easy to break by accident: no runtime

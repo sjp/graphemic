@@ -3,6 +3,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
+    // Benchmarks live outside `src` and are never part of a test run: they are
+    // too noisy to gate anything on, and `npm run bench` is where the numbers in
+    // bench/RESULTS.md come from.
+    benchmark: { include: ['bench/**/*.bench.ts'] },
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

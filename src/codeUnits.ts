@@ -21,9 +21,14 @@
  * Every function imports only the internals it needs and the module has no
  * top-level side effects, so a caller who only measures strings does not ship
  * the slicing machinery.
+ *
+ * For ASCII without a carriage return there is nothing to fix — every offset is
+ * already a boundary — so these delegate to the native method and cost a single
+ * scan over the part of the string the call can reach.
  */
 
 import { sliceRange } from './internal/engine.js';
+import { isTrivial, trivialTruncation } from './internal/fastPath.js';
 import { measureCodeUnits } from './internal/measure.js';
 import { truncateTo } from './internal/truncate.js';
 import { requireNonNegativeInteger } from './internal/validate.js';
@@ -66,7 +71,12 @@ export function length(s: string): number {
  *   and the default grapheme boundary is used.
  */
 export function slice(s: string, start?: number, end?: number, options?: BoundaryOptions): string {
-  const [from, to] = sliceRange(s, start, end, measureCodeUnits, options?.boundary ?? 'grapheme');
+  const boundary = options?.boundary ?? 'grapheme';
+  // The one case where the native method needed no fixing: in a trivial string
+  // every offset is already a boundary.
+  if (isTrivial(s, boundary)) return s.slice(start, end);
+
+  const [from, to] = sliceRange(s, start, end, measureCodeUnits, boundary);
   return s.slice(from, to);
 }
 
@@ -99,5 +109,9 @@ export function truncate(s: string, max: number, options?: TruncateOptions): str
   requireNonNegativeInteger('max', max);
   if (s.length <= max) return s;
 
-  return truncateTo(s, max, measureCodeUnits, options?.boundary ?? 'grapheme', options?.ellipsis);
+  const boundary = options?.boundary ?? 'grapheme';
+  const trivial = trivialTruncation(s, max, options?.ellipsis, measureCodeUnits, boundary);
+  if (trivial !== undefined) return trivial;
+
+  return truncateTo(s, max, measureCodeUnits, boundary, options?.ellipsis);
 }

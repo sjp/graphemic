@@ -5,6 +5,13 @@
  * string the library walks, so they are written to be pure and allocation-free:
  * no `TextEncoder`, no spread, and no `for…of` over a string, which allocates a
  * fresh one-code-point string on every iteration. Plain `charCodeAt` loops only.
+ *
+ * {@link measureCodePoints} and {@link measureUtf8} are also correct applied to a
+ * whole string rather than one segment, and that is how `codePoints.length` and
+ * `utf8.length` are implemented: neither count depends on where the boundaries
+ * fall, so neither needs the walk that would produce them. {@link measureGraphemes}
+ * is the exception, and the reason the distinction matters — a segment is one
+ * grapheme by definition, a string is not.
  */
 
 /** Returns the size of a single grapheme (or code point) in some unit. */

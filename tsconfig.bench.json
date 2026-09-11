@@ -1,0 +1,16 @@
+{
+  // The benchmarks live outside `src` so they are never published, and they
+  // measure the built output rather than the sources — which is why this is a
+  // separate project: it can only be checked after `npm run build`, and
+  // `npm run typecheck` has to stay runnable on a clean checkout. `rootDir` moves
+  // up to the repository root because these files sit beside `src` rather than
+  // inside it, and nothing here is emitted.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "rootDir": "."
+  },
+  "include": ["bench"]
+}
