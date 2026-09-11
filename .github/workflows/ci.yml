@@ -36,7 +36,8 @@ jobs:
       - run: npm run format:check
       # Ten times the local number of generated cases per property: still a few
       # seconds, and the extra runs are what turn a rare input into a failure
-      # here rather than in someone's application.
+      # here rather than in someone's application. (The fast/slow path comparison
+      # keeps its own fixed count; src/slowPath.test.ts says why.)
       - run: npm run test:coverage
         env:
           PROPERTY_RUNS: 5000

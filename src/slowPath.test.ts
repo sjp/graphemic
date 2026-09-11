@@ -48,9 +48,18 @@ vi.mock('./internal/fastPath.js', async (importOriginal) => {
   } satisfies typeof actual;
 });
 
-/** Enough to be worth the seconds it costs; CI raises it. */
-const DEFAULT_RUNS = 200;
-const runs = { numRuns: Number(process.env['PROPERTY_RUNS'] ?? DEFAULT_RUNS) };
+/**
+ * A fixed count, deliberately not raised by `PROPERTY_RUNS` in CI.
+ *
+ * Every case here runs the whole surface twice, so the count is paid for many
+ * times over, and more of it buys almost nothing: planting the plausible bugs in
+ * the fast-path predicates — admitting CR, admitting Latin-1, a prefix check one
+ * unit short, controls counted as printable, an ellipsis charged at the budget —
+ * each was caught by the fixed cases below alone, and then again by a generator
+ * within a thousand cases on every seed tried. The one exception, Latin-1 let
+ * through `isTrivial`, took a median of ~500 and has a fixed case of its own.
+ */
+const runs = { numRuns: 1000 };
 
 const ELLIPSIS = '\u2026';
 const CODE_POINT = { boundary: 'codePoint' } as const satisfies BoundaryOptions;
