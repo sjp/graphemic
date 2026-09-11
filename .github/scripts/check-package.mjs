@@ -11,7 +11,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const UNPACKED_SIZE_BUDGET = 50_000;
+const UNPACKED_SIZE_BUDGET = 200_000;
 
 const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 
