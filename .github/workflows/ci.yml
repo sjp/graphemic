@@ -32,6 +32,9 @@ jobs:
       - name: Report ICU and Unicode versions
         run: node -e "console.log(process.versions.icu, process.versions.unicode)"
       - run: npm run typecheck
+      # oxlint's type-aware linting picks up bench/tsconfig.json, which type-checks
+      # the benchmarks against ../dist/*.js — so the build has to exist before lint runs.
+      - run: npm run build
       - run: npm run lint
       - run: npm run format:check
       # Ten times the local number of generated cases per property: still a few
@@ -41,7 +44,6 @@ jobs:
       - run: npm run test:coverage
         env:
           PROPERTY_RUNS: 5000
-      - run: npm run build
       # The benchmarks are never run here — they are far too noisy to gate a merge
       # on, and their numbers are recorded by hand in bench/RESULTS.md — but they
       # are compiled against the build they measure, so they cannot rot unnoticed.
