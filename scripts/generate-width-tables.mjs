@@ -36,7 +36,7 @@ import { fileURLToPath } from 'node:url';
  * comment on `src/columns.ts` — but picking the version Node's current ICU
  * implements keeps the gap as small as it can be on the day of the pin.
  */
-const UCD_VERSION = '17.0.0';
+const UCD_VERSION = '18.0.0';
 
 const VENDOR = new URL(`../vendor/ucd/${UCD_VERSION}/`, import.meta.url);
 const OUTPUT = new URL('../src/internal/width/tables.ts', import.meta.url);

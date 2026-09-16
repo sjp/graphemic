@@ -337,7 +337,7 @@ Two further limits worth knowing:
   tab could honestly be given — it depends on the cursor position, which this
   library cannot see. Expand tabs before measuring.
 - **Unicode versions drift.** `Intl.Segmenter` follows the runtime's; the width
-  tables follow a pinned one (currently 17.0.0). A code point the tables have
+  tables follow a pinned one (currently 18.0.0). A code point the tables have
   never heard of measures 1, which is also what a terminal whose font has never
   heard of it will draw.
 

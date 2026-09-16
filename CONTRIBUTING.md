@@ -120,7 +120,7 @@ Do not re-export it, even for symmetry.
 The data flows one way:
 
 ```text
-vendor/ucd/17.0.0/*.txt          committed, never fetched at build time
+vendor/ucd/18.0.0/*.txt          committed, never fetched at build time
   → scripts/generate-width-tables.mjs
     → src/internal/width/tables.ts   committed, generated, do not edit
       → src/internal/width/ranges.ts decodes lazily, searches by binary search

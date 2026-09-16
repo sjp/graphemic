@@ -1,10 +1,10 @@
-# Unicode Character Database 17.0.0
+# Unicode Character Database 18.0.0
 
-Verbatim copies of three UCD data files, downloaded on 11 September 2026 from:
+Verbatim copies of three UCD data files, downloaded on 16 September 2026 from:
 
-- <https://www.unicode.org/Public/17.0.0/ucd/EastAsianWidth.txt>
-- <https://www.unicode.org/Public/17.0.0/ucd/extracted/DerivedGeneralCategory.txt>
-- <https://www.unicode.org/Public/17.0.0/ucd/emoji/emoji-data.txt>
+- <https://www.unicode.org/Public/18.0.0/ucd/EastAsianWidth.txt>
+- <https://www.unicode.org/Public/18.0.0/ucd/extracted/DerivedGeneralCategory.txt>
+- <https://www.unicode.org/Public/18.0.0/ucd/emoji/emoji-data.txt>
 
 They are the input to `scripts/generate-width-tables.mjs`, which emits
 `src/internal/width/tables.ts`. They are committed rather than fetched at build
@@ -15,9 +15,10 @@ them with no network.
 None of this directory is published: `files` in `package.json` is `dist` and the
 changelog. See CONTRIBUTING.md for how to move to a newer UCD.
 
-17.0.0 is the version Node 26's ICU implements, which keeps the drift between
-these tables and the runtime's own `Intl.Segmenter` as small as it can be. It
-will drift anyway; `src/columns.ts` says what happens when it does.
+18.0.0 is the current UCD release. It is one version ahead of the Unicode 17.0
+that Node 26's ICU implements, so these tables know about code points the
+runtime's own `Intl.Segmenter` does not yet; the two will always drift one way
+or the other, and `src/columns.ts` says what happens when they do.
 
 ## Licence
 
