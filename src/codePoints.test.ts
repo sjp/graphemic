@@ -47,6 +47,7 @@ describe('length', () => {
 
   it.each(corpus)('counts the code points of $name', ({ s, codePoints }) => {
     expect(length(s)).toBe(codePoints);
+    // oxlint-disable-next-line no-misused-spread -- code points are exactly what's under test here
     expect(length(s)).toBe([...s].length);
   });
 

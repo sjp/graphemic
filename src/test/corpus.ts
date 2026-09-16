@@ -398,6 +398,7 @@ export const longCorpus: readonly Fixture[] = [
 export const oracles = {
   graphemes: (s: string): number =>
     [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s)].length,
+  // oxlint-disable-next-line no-misused-spread -- code points are the reference this oracle counts
   codePoints: (s: string): number => [...s].length,
   codeUnits: (s: string): number => s.length,
   utf8: (s: string): number => new TextEncoder().encode(s).length,

@@ -97,6 +97,7 @@ function literal(source: string): { readonly value: unknown } | undefined {
   try {
     // The alternative to evaluating the comment is writing a parser for every
     // literal a sample might state, which would then need its own tests.
+    // oxlint-disable-next-line no-implied-eval -- evaluating this repo's own README, not user input
     return { value: new Function(`return (${source});`)() as unknown };
   } catch {
     return undefined;
@@ -196,6 +197,7 @@ function run(block: Block): string[] {
   };
 
   // The README is the source under test, so it is compiled and run as source.
+  // oxlint-disable-next-line no-implied-eval -- evaluating this repo's own README, not user input
   const sample = new Function(...prepared.names, 'check', prepared.body) as (
     ...args: unknown[]
   ) => void;

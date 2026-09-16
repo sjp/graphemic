@@ -68,6 +68,7 @@ describe('isTrivial', () => {
         if (!isTrivial(s)) return;
 
         expect(graphemes.toArray(s).length).toBe(s.length);
+        // oxlint-disable-next-line no-misused-spread -- code points are exactly what's under test here
         expect([...s].length).toBe(s.length);
         expect(measureUtf8(s)).toBe(s.length);
       }),

@@ -51,6 +51,7 @@ const anyString = fc.oneof(
 /** The reference segmentation, in whichever unit a cut is allowed to land on. */
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 function segmentsOf(s: string, boundary: Boundary): string[] {
+  // oxlint-disable-next-line no-misused-spread -- code points are exactly what this branch returns
   if (boundary === 'codePoint') return [...s];
   return [...segmenter.segment(s)].map(({ segment }) => segment);
 }

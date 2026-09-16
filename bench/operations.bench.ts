@@ -55,6 +55,7 @@ describe.each(samples)('graphemes.toArray - $name', ({ s }) => {
   test('against spreading the string', async ({ bench }) => {
     await bench.compare(
       bench('graphemes.toArray', () => toArray(s)),
+      // oxlint-disable-next-line no-misused-spread -- the naive alternative being benchmarked against
       bench('spread the string', () => [...s]),
       RUN,
     );

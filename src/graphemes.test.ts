@@ -470,6 +470,7 @@ describe('reverse', () => {
 
 /** Whether `s` contains a surrogate that is not part of a pair. */
 const hasLoneSurrogate = (s: string): boolean =>
+  // oxlint-disable-next-line no-misused-spread -- inspecting code points is the point, not a mistake
   [...s].some((codePoint) => {
     const unit = codePoint.charCodeAt(0);
     return codePoint.length === 1 && unit >= 0xd800 && unit <= 0xdfff;

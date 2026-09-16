@@ -89,6 +89,7 @@ export function contains(edges: Uint32Array, codePoint: number): boolean {
     const middle = (low + high) >>> 1;
     // In range by construction, which `noUncheckedIndexedAccess` cannot see;
     // asserting it is cheaper than a branch no test could ever reach.
+    // oxlint-disable-next-line no-unsafe-type-assertion -- see comment above
     if ((edges[middle] as number) <= codePoint) low = middle + 1;
     else high = middle;
   }

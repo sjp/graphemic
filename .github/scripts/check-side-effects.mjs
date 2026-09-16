@@ -61,6 +61,7 @@ function modules(directory) {
     if (entry.isDirectory()) found.push(...modules(path));
     else if (entry.name.endsWith('.js')) found.push(path);
   }
+  // oxlint-disable-next-line require-array-sort-compare -- default lexicographic order is correct for paths
   return found.toSorted();
 }
 

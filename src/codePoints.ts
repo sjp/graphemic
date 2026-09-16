@@ -78,6 +78,7 @@ export function iterate(s: string): IterableIterator<string> {
  */
 export function toArray(s: string): string[] {
   if (isSurrogateFree(s)) return s.split('');
+  // oxlint-disable-next-line no-misused-spread -- code points are exactly what this module returns
   return [...s];
 }
 
