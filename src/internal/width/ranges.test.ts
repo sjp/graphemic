@@ -23,19 +23,19 @@ import { AMBIGUOUS, EMOJI_PRESENTATION, UCD_VERSION, WIDE, ZERO_WIDTH } from './
 
 const DIGITS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
+function number(value: number): string {
+  let out = '';
+  let rest = value;
+  do {
+    const digit = rest & 0b01_1111;
+    rest >>>= 5;
+    out += DIGITS[rest > 0 ? digit | 0b10_0000 : digit];
+  } while (rest > 0);
+  return out;
+}
+
 /** The encoder from `scripts/generate-width-tables.mjs`, restated for the test. */
 function encode(ranges: readonly (readonly [number, number])[]): string {
-  const number = (value: number): string => {
-    let out = '';
-    let rest = value;
-    do {
-      const digit = rest & 0b01_1111;
-      rest >>>= 5;
-      out += DIGITS[rest > 0 ? digit | 0b10_0000 : digit];
-    } while (rest > 0);
-    return out;
-  };
-
   let out = '';
   let previousEnd = -1;
   for (const [start, end] of ranges) {
