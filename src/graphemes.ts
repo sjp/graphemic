@@ -419,7 +419,7 @@ export function padEnd(s: string, targetLength: number, fill = ' '): string {
  * it: negatives and `NaN` become 0, fractions truncate.
  *
  * @example
- * indexOf('hi \u{1F44B}\u{1F3FD}!', '!'); // 4 — native says 6
+ * indexOf('hi \u{1F44B}\u{1F3FD}!', '!'); // 4 — native says 7
  * indexOf('e\u0301x', 'e'); // -1 — native says 0
  * indexOf('\u{1F44B}\u{1F3FD}', '\u{1F44B}'); // -1 — half a character is not there
  * indexOf('a\u{1F44B}\u{1F3FD}a', 'a', 1); // 2

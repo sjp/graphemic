@@ -195,7 +195,7 @@ graphemes.chunk('hi 👋🏽!', 2); // ['hi', ' 👋🏽', '!']
 graphemes.reverse('ab🇦🇺'); // '🇦🇺ba'
 graphemes.padStart('👋🏽', 3, '.'); // '..👋🏽' — native padding adds nothing here
 graphemes.padEnd('ab', 5, '👋🏽'); // 'ab👋🏽👋🏽👋🏽' — native padding cuts the fill in half
-graphemes.indexOf('hi 👋🏽!', '!'); // 4 — native says 6
+graphemes.indexOf('hi 👋🏽!', '!'); // 4 — native says 7
 graphemes.includes('hi 👋🏽', '👋'); // false — half a character is not there
 ```
 
