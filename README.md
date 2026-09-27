@@ -15,7 +15,7 @@ Whichever unit you measure in, the cut lands between whole characters.
 import { codeUnits, graphemes } from '@sjpnz/graphemic';
 
 'hello! 👋'.slice(0, 8); // 'hello! \uD83D' — half a waving hand, rendered as �
-codeUnits.truncate('hello! 👋', 8); // 'hello! ' — still eight units, no broken character
+codeUnits.truncate('hello! 👋', 8); // 'hello! ' — seven units, within the eight, no broken character
 
 'hi 👋🏽'.length; // 7
 graphemes.length('hi 👋🏽'); // 4 — what a person counts

@@ -97,7 +97,7 @@ describe('prefixEnd', () => {
   it.each([
     ['a budget that stops before the emoji', 10, 7],
     ['a budget that fits the emoji exactly', 11, 9],
-    ['a budget one byte short of the emoji', 9, 7],
+    ['a budget two bytes short of the emoji', 9, 7],
   ] as const)('handles %s, measured in UTF-8 bytes', (_label, max, expected) => {
     expect(prefixEnd(GREETING, max, measureUtf8, 'grapheme')).toBe(expected);
   });

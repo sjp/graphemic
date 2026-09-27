@@ -529,7 +529,7 @@ describe('padEnd', () => {
 
   it('never leaves half a surrogate pair behind, unlike String#padEnd', () => {
     // The native call is the bug this exists to fix: it ends in a lone high
-    // surrogate, because it cuts the fill at four code units of seven.
+    // surrogate, because it cuts the fill at three code units of four.
     expect(hasLoneSurrogate('ab'.padEnd(5, WAVE_MEDIUM))).toBe(true);
     expect(hasLoneSurrogate(padEnd('ab', 5, WAVE_MEDIUM))).toBe(false);
   });

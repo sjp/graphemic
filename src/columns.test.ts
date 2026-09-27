@@ -178,7 +178,7 @@ describe.each([
   });
 
   it('never exceeds the target with a wide fill', () => {
-    // Three of them would be six columns, which is two past the target.
+    // Three of them would be six columns, which is one past the target.
     const padded = pad('ab', 7, '東');
     expect(padded).toBe(leading ? `東東ab` : `ab東東`);
     expect(length(padded)).toBe(6);
