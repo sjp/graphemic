@@ -31,8 +31,11 @@ before opening a pull request and there should be no surprises.
 | `npm run bench`         | Benchmarks against the built output — see below         |
 
 Tests are colocated: `src/graphemes.ts` is tested by `src/graphemes.test.ts`.
-The cross-cutting suites live in `src/test/`, and `src/properties.test.ts`
-holds the invariants that have to hold for every string.
+The cross-cutting suites live in `src/test/`: `src/test/properties/` holds the
+invariants that have to hold for every string, and `src/test/slowPath/` holds
+each fast path to the answer of the general one. Both are spread over several
+files so that Vitest, which runs files in parallel but a file's tests in
+series, can run them side by side.
 
 ## The rule the engine is built on
 

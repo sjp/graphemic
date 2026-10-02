@@ -4,49 +4,31 @@
  * The fast paths answer with `String.prototype` where the units of a string all
  * coincide, which is a second implementation of every operation in the package —
  * and a second implementation is a second set of bugs unless something holds the
- * two to the same answer. That is all this file does: it replaces the predicates
- * in `internal/fastPath.js` with ones that say no, runs the whole public surface
- * again, and compares. Nothing here asserts what the right answer *is*; the tests
- * beside each namespace do that. This asserts only that there is one answer.
+ * two to the same answer. That is all the tests in this directory do: they
+ * replace the predicates in `internal/fastPath.js` with ones that say no, run
+ * the whole public surface again, and compare. Nothing here asserts what the
+ * right answer *is*; the tests beside each namespace do that. This asserts only
+ * that there is one answer.
  *
  * Test-only mocking rather than a hook in the library: the shipped code should
  * not carry a switch that exists to be flipped by a test.
+ *
+ * Each test file has to make the same `vi.mock` call itself (Vitest only hoists
+ * one written in the test file), and the generated cases are split across
+ * files so that they run side by side rather than one after the other.
  */
 
 import fc from 'fast-check';
-import { describe, expect, it, vi } from 'vitest';
+import { expect } from 'vitest';
 
-import * as codePoints from './codePoints.js';
-import * as codeUnits from './codeUnits.js';
-import * as columns from './columns.js';
-import * as graphemes from './graphemes.js';
-import { corpus } from './test/corpus.js';
-import type { BoundaryOptions, ColumnsOptions } from './types.js';
-import * as utf8 from './utf8.js';
-
-const forced = vi.hoisted(() => ({ slow: false }));
-
-vi.mock('./internal/fastPath.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./internal/fastPath.js')>();
-  return {
-    isTrivial: (...args: Parameters<typeof actual.isTrivial>) =>
-      forced.slow ? false : actual.isTrivial(...args),
-    isTrivialPrefix: (...args: Parameters<typeof actual.isTrivialPrefix>) =>
-      forced.slow ? false : actual.isTrivialPrefix(...args),
-    trivialTruncation: (...args: Parameters<typeof actual.trivialTruncation>) =>
-      forced.slow ? undefined : actual.trivialTruncation(...args),
-    isAscii: (...args: Parameters<typeof actual.isAscii>) =>
-      forced.slow ? false : actual.isAscii(...args),
-    isSurrogateFree: (...args: Parameters<typeof actual.isSurrogateFree>) =>
-      forced.slow ? false : actual.isSurrogateFree(...args),
-    isPrintableAscii: (...args: Parameters<typeof actual.isPrintableAscii>) =>
-      forced.slow ? false : actual.isPrintableAscii(...args),
-    isPrintableAsciiPrefix: (...args: Parameters<typeof actual.isPrintableAsciiPrefix>) =>
-      forced.slow ? false : actual.isPrintableAsciiPrefix(...args),
-    printableAsciiTruncation: (...args: Parameters<typeof actual.printableAsciiTruncation>) =>
-      forced.slow ? undefined : actual.printableAsciiTruncation(...args),
-  } satisfies typeof actual;
-});
+import * as codePoints from '../../codePoints.js';
+import * as codeUnits from '../../codeUnits.js';
+import * as columns from '../../columns.js';
+import * as graphemes from '../../graphemes.js';
+import type { BoundaryOptions, ColumnsOptions } from '../../types.js';
+import * as utf8 from '../../utf8.js';
+import { corpus } from '../corpus.js';
+import { forced } from './switch.js';
 
 /**
  * A fixed count, deliberately not raised by `PROPERTY_RUNS` in CI.
@@ -55,13 +37,13 @@ vi.mock('./internal/fastPath.js', async (importOriginal) => {
  * times over, and more of it buys almost nothing: planting the plausible bugs in
  * the fast-path predicates — admitting CR, admitting Latin-1, a prefix check one
  * unit short, controls counted as printable, an ellipsis charged at the budget —
- * each was caught by the fixed cases below alone, and then again by a generator
+ * each was caught by the fixed cases alone, and then again by a generator
  * within a thousand cases on every seed tried. The one exception, Latin-1 let
  * through `isTrivial`, took a median of ~500 and has a fixed case of its own.
  */
-const runs = { numRuns: 1000 };
+export const runs = { numRuns: 1000 };
 
-const ELLIPSIS = '\u2026';
+const ELLIPSIS = '…';
 const CODE_POINT = { boundary: 'codePoint' } as const satisfies BoundaryOptions;
 const WIDE_AMBIGUOUS = { ambiguous: 2 } as const satisfies ColumnsOptions;
 
@@ -156,7 +138,7 @@ function everyOperation(s: string): Record<string, unknown> {
 }
 
 /** Runs the surface twice: once as shipped, once with every fast path disabled. */
-function bothPaths(s: string): void {
+export function bothPaths(s: string): void {
   const fast = everyOperation(s);
   forced.slow = true;
   try {
@@ -167,56 +149,13 @@ function bothPaths(s: string): void {
 }
 
 /** ASCII with the characters the predicates care about: CR, LF, tab, separators. */
-const asciiLike = fc.string({
+export const asciiLike = fc.string({
   unit: fc.constantFrom('a', 'b', 'x', ',', ' ', '\n', '\r', '\t', '.'),
 });
 
 /** Corpus fixtures glued to ASCII, so a fast path meets a boundary it cannot take. */
-const asciiAndBeyond = fc
+export const asciiAndBeyond = fc
   .array(fc.constantFrom(...corpus.map(({ s }) => s), 'a', 'ab', 'x,y', ' ', '\r\n'), {
     maxLength: 6,
   })
   .map((parts) => parts.join(''));
-
-describe('the fast paths and the general ones', () => {
-  it.each([
-    ['the empty string', ''],
-    ['one character', 'a'],
-    ['two characters', 'ab'],
-    ['a sentence', 'hello world, nice to meet you'],
-    ['separators', 'a,b,c'],
-    ['a repeated character', 'aaaa'],
-    ['a line feed', 'a\nb'],
-    ['a carriage return', 'a\rb'],
-    ['CRLF', 'ab\r\ncd'],
-    ['a tab and a null', 'a\tb\u0000'],
-    ['ASCII around an emoji', 'hi \u{1F44B}\u{1F3FD} there'],
-    ['ASCII around a combining mark', 'abc\u0301def'],
-    ['ASCII around a lone surrogate', 'ab\uD83Dcd'],
-    ['a Latin-1 character', 'caf\u00E9 au lait'],
-  ])('agree on %s', (_label, s) => {
-    bothPaths(s);
-  });
-
-  it.each(corpus)('agree on $name', ({ s }) => {
-    bothPaths(s);
-  });
-
-  it('agree on generated ASCII', () => {
-    fc.assert(
-      fc.property(asciiLike, (s) => {
-        bothPaths(s);
-      }),
-      runs,
-    );
-  });
-
-  it('agree on generated ASCII spliced with the corpus', () => {
-    fc.assert(
-      fc.property(asciiAndBeyond, (s) => {
-        bothPaths(s);
-      }),
-      runs,
-    );
-  });
-});
