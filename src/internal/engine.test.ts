@@ -43,6 +43,15 @@ function graphemeArray(s: string): string[] {
   return [...segmenter.segment(s)].map(({ segment }) => segment);
 }
 
+/** A `sliceRange` call that landed somewhere it should not have, and where. */
+interface BadCut {
+  name: string;
+  start: number | undefined;
+  end: number | undefined;
+  from: number;
+  to: number;
+}
+
 /** What a namespace's `slice` will do: one `sliceRange`, one `String#slice`. */
 function slice(s: string, start?: number, end?: number, measure = measureCodeUnits): string {
   const [from, to] = sliceRange(s, start, end, measure, 'grapheme');
@@ -269,30 +278,34 @@ describe('sliceRange', () => {
 
   describe.each(boundaries)('in %s mode', (boundary) => {
     it.each(units)('never cuts inside a segment of $unit', ({ measure }) => {
-      for (const { s } of corpus) {
+      // Collected rather than asserted one by one: this is thousands of cuts,
+      // and an `expect` apiece is most of what the test would spend its time on.
+      const badCuts: BadCut[] = [];
+
+      for (const { name, s } of corpus) {
         const offsets = boundaryOffsets(s, boundary);
         const wellFormed = s.isWellFormed();
 
         for (const start of indices) {
           for (const end of indices) {
             const [from, to] = sliceRange(s, start, end, measure, boundary);
-
-            expect(offsets.has(from)).toBe(true);
-            expect(offsets.has(to)).toBe(true);
-            expect(from).toBeLessThanOrEqual(to);
-
             const sliced = s.slice(from, to);
-            if (wellFormed) expect(sliced.isWellFormed()).toBe(true);
-            if (boundary === 'grapheme') {
+
+            const ok =
+              offsets.has(from) &&
+              offsets.has(to) &&
+              from <= to &&
+              (!wellFormed || sliced.isWellFormed()) &&
               // Re-segmenting the result finds the same boundaries it was cut
               // on, which is only true if the cut took whole graphemes.
-              for (const { index } of segmenter.segment(sliced)) {
-                expect(offsets.has(index + from)).toBe(true);
-              }
-            }
+              (boundary !== 'grapheme' ||
+                [...segmenter.segment(sliced)].every(({ index }) => offsets.has(index + from)));
+            if (!ok) badCuts.push({ name, start, end, from, to });
           }
         }
       }
+
+      expect(badCuts).toEqual([]);
     });
 
     it.each(units)('never returns more of $unit than it was asked for', ({ measure }) => {
